@@ -98,7 +98,6 @@ object DownloadManager
 	{	
 		val hdfsManager = new HDFSManager
 		
-		if (config.getMode != "local")
-			hdfsManager.downloadIfRequired(fileName, config.getToolsFolder(), config.getTmpFolder)
+		hdfsManager.downloadIfRequired(fileName, config.getToolsFolder(), config.getTmpFolder)
 	}
 }

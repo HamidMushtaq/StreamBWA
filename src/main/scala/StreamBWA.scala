@@ -65,44 +65,40 @@ def bwaRun (chunkName: String, config: Configuration)
 	
 	var t0 = System.currentTimeMillis
 	
-	if (config.getMode != "local")
+	hdfsManager.create(config.getOutputFolder + "log/" + x)
+	DownloadManager.downloadBinProgram("bwa", config)
+	val file = new File(FilesManager.getBinToolsDirPath(config) + "bwa") 
+	file.setExecutable(true)
+	if (downloadNeededFiles)
 	{
-		hdfsManager.create(config.getOutputFolder + "log/bwa/" + x)
-		DownloadManager.downloadBinProgram("bwa", config)
-		val file = new File(FilesManager.getBinToolsDirPath(config) + "bwa") 
-		file.setExecutable(true)
-		if (downloadNeededFiles)
-		{
-			LogWriter.dbgLog("bwa/" + x, t0, "download\tDownloading reference files for bwa", config)
-			DownloadManager.downloadBWAFiles("dlbwa/" + x, config)
-		}
+		LogWriter.dbgLog(x, t0, "download\tDownloading reference files for bwa", config)
+		DownloadManager.downloadBWAFiles("dlbwa/" + x, config)
 	}
 	
-	LogWriter.dbgLog("bwa/" + x, t0, "*\tchunkName = " + chunkName + ", x = " + x + ", inputFileName = " + inputFileName, config)
+	LogWriter.dbgLog(x, t0, "*\tchunkName = " + chunkName + ", x = " + x + ", inputFileName = " + inputFileName, config)
 	
 	if (!Files.exists(Paths.get(FilesManager.getRefFilePath(config))))
 	{
-		LogWriter.dbgLog("bwa/" + x, t0, "#\tReference file " + FilesManager.getRefFilePath(config) + " not found on this node!", config)
-		return null
+		LogWriter.dbgLog(x, t0, "#\tReference file " + FilesManager.getRefFilePath(config) + " not found on this node!", config)
+		return
 	}
 	
 	var inputFileBytes: Array[Byte] = null
 	inputFileBytes = hdfsManager.readBytes(inputFileName)
-	LogWriter.dbgLog("bwa/" + x, t0, "0a\tSize of " + inputFileName + " = " + (inputFileBytes.size / (1024 * 1024)) + " MB.", config)
+	LogWriter.dbgLog(x, t0, "0a\tSize of " + inputFileName + " = " + (inputFileBytes.size / (1024 * 1024)) + " MB.", config)
 	
 	val decompressedStr = new GzipDecompressor(inputFileBytes).decompress
 	new PrintWriter(fqFileName) {write(decompressedStr); close}
+	LogWriter.dbgLog(x, t0, "0b\tFastq file size = " + ((new File(fqFileName).length) / (1024 * 1024)) + " MB", config)
 	
-	LogWriter.dbgLog("bwa/" + x, t0, "0b\tFastq file size = " + ((new File(fqFileName).length) / (1024 * 1024)) + " MB", config)
 	// bwa mem input_files_directory/fasta_file.fasta -p -t 2 x.fq > out_file
 	val progName = FilesManager.getBinToolsDirPath(config) + "bwa mem "
 	val command_str = progName + FilesManager.getRefFilePath(config) + " " + config.getExtraBWAParams + " -t " + config.getNumThreads + " " + fqFileName
-	var writerMap = new scala.collection.mutable.HashMap[Long, StringBuilder]()
 	
-	LogWriter.dbgLog("bwa/" + x, t0, "1\tbwa mem started: " + command_str, config)
+	LogWriter.dbgLog(x, t0, "1\tbwa mem started: " + command_str, config)
 	val bwaOutStr = new StringBuilder(inputFileBytes.size * 2)
 	val logger = ProcessLogger(
-		(o: String) => {bwaOutStr.append(o)}
+		(o: String) => {bwaOutStr.append(o + '\n')}
 		,
 		(e: String) => {} // do nothing
 	)
@@ -112,7 +108,7 @@ def bwaRun (chunkName: String, config: Configuration)
 	
 	hdfsManager.writeWholeFile(config.getOutputFolder + x.replace(".fq", ".sam"), bwaOutStr.toString)
 	
-	LogWriter.dbgLog("bwa/" + x, t0, "3\t" + "Content uploaded to the HDFS", config)
+	LogWriter.dbgLog(x, t0, "2\t" + "Content uploaded to the HDFS", config)
 }
 
 def main(args: Array[String]) 
@@ -134,18 +130,12 @@ def main(args: Array[String])
 	
 	config.print() 
 	
-	if (config.getMode != "local")
-	{
-		if (!hdfsManager.exists("sparkLog.txt"))
-			hdfsManager.create("sparkLog.txt")
-		if (!hdfsManager.exists("errorLog.txt"))
-			hdfsManager.create("errorLog.txt")
-	}
-	else
-		FilesManager.makeDirIfRequired(config.getOutputFolder + "log", config)
+	if (!hdfsManager.exists("sparkLog.txt"))
+		hdfsManager.create("sparkLog.txt")
+	if (!hdfsManager.exists("errorLog.txt"))
+		hdfsManager.create("errorLog.txt")
 	
 	var t0 = System.currentTimeMillis
-	val numOfRegions = config.getNumRegions.toInt
 	// Spark Listener
 	sc.addSparkListener(new SparkListener() 
 	{
@@ -182,7 +172,6 @@ def main(args: Array[String])
 		println("The input directory " + config.getInputFolder() + " does not exist!")
 		System.exit(1)
 	}
-	LogWriter.statusLog("Program flags:", t0, ProgramFlags.toString, config)
 	inputFileNames.foreach(println)
 	
 	// Give chunks to bwa instances

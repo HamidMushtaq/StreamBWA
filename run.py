@@ -32,10 +32,10 @@ refPath = doc.getElementsByTagName("refPath")[0].firstChild.data
 inputFolder = doc.getElementsByTagName("inputFolder")[0].firstChild.data
 outputFolder = doc.getElementsByTagName("outputFolder")[0].firstChild.data
 tmpFolder = doc.getElementsByTagName("tmpFolder")[0].firstChild.data
-numInstances = doc.getElementsByTagName("numInstances" + configPart)[0].firstChild.data
-numTasks = doc.getElementsByTagName("numTasks" + configPart)[0].firstChild.data
-exe_mem = doc.getElementsByTagName("execMemGB" + configPart)[0].firstChild.data + "g"
-driver_mem = doc.getElementsByTagName("driverMemGB" + configPart)[0].firstChild.data + "g"
+numInstances = doc.getElementsByTagName("numInstances")[0].firstChild.data
+numTasks = doc.getElementsByTagName("numTasks")[0].firstChild.data
+exe_mem = doc.getElementsByTagName("execMemGB")[0].firstChild.data + "g"
+driver_mem = doc.getElementsByTagName("driverMemGB")[0].firstChild.data + "g"
 
 def executeHadoop():	
 	if USE_YARN_CLIENT_FOR_HADOOP:
@@ -47,7 +47,7 @@ def executeHadoop():
 	
 	cmdStr = "$SPARK_HOME/bin/spark-submit " + \
 	"--class \"StreamBWA\" --master " + diff_str + " " + \
-	"--driver-memory " + driver_mem + " --executor-memory " + em + " " + \
+	"--driver-memory " + driver_mem + " --executor-memory " + exe_mem + " " + \
 	"--num-executors " + numInstances + " --executor-cores " + numTasks + " " + \
 	exeName + " " + os.path.basename(configFilePath)
 	
@@ -63,14 +63,12 @@ def addToLog(s):
 	f.write(s + "\n")
 	f.close() 
 
-def run():
-		
 start_time = time.time()
 
 addToLog("########################################\n[" + time.ctime() + "] Part1 started.")
 os.system("hadoop fs -rm -r -f " + outputFolder)
 executeHadoop()
-addToLog("[" + time.ctime() + "] Part" + str(part) + " completed.")
+addToLog("[" + time.ctime() + "]")
 	
 time_in_secs = int(time.time() - start_time)
 mins = time_in_secs / 60

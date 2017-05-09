@@ -1,6 +1,6 @@
 <configuration>
 	<refPath>filesB37/human_g1k_v37_decoy.fasta</refPath>
-	<inputFolder>vlad_576</inputFolder>
+	<inputFolder>wg_chunks</inputFolder>
 	<outputFolder>bwaOut</outputFolder> 
 	<toolsFolder>power8tools</toolsFolder>
 	<tmpFolder>/tmp/spark</tmpFolder>
@@ -8,7 +8,7 @@
 	<rgString>@RG\tID:sample_lane\tSM:sample\tPL:illumina\tLB:sample\tPU:lane</rgString>
 	<extraBWAParams>-p</extraBWAParams>
 	<execMemGB>112</execMemGB> 						
-	<driverMemGB1>4</driverMemGB1> 					
+	<driverMemGB>4</driverMemGB> 					
 	<numInstances>4</numInstances> 	
 	<numThreads>4</numThreads>
   	<numTasks>9</numTasks>

@@ -58,7 +58,7 @@ public class Configuration implements Serializable
 			extraBWAParams = document.getElementsByTagName("extraBWAParams").item(0).getTextContent();
 			tmpFolder = correctFolderName(document.getElementsByTagName("tmpFolder").item(0).getTextContent());
 			sfFolder = correctFolderName(document.getElementsByTagName("sfFolder").item(0).getTextContent());
-			numInstances = document.getElementsByTagName("numInstances).item(0).getTextContent();
+			numInstances = document.getElementsByTagName("numInstances").item(0).getTextContent();
 			numThreads = document.getElementsByTagName("numThreads").item(0).getTextContent();
 			execMemGB = document.getElementsByTagName("execMemGB").item(0).getTextContent();
 			driverMemGB = document.getElementsByTagName("driverMemGB").item(0).getTextContent();

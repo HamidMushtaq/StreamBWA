@@ -21,20 +21,15 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStreamReader
+import java.util.zip.GZIPInputStream
+import org.apache.commons.io.IOUtils
 
-class GzipCompressor(data: String, compLevel: Int)
+class GzipDecompressor(compressed: Array[Byte])
 {
-	def compress() : Array[Byte] = 
+	def decompress() : String = 
 	{
-		val bos = new ByteArrayOutputStream(data.length)
-		val gzip = new GZIPOutputStreamWithLevel(bos)
-		
-		gzip.setLevel(compLevel)
-		gzip.write(data.getBytes)
-		gzip.close
-		
-		val compressed = bos.toByteArray
-		bos.close
-		return compressed
+		val out = new ByteArrayOutputStream()
+		IOUtils.copy(new GZIPInputStream(new ByteArrayInputStream(compressed)), out)
+		return out.toString("UTF-8")
 	}
 }
