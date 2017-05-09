@@ -11,5 +11,5 @@
 	<driverMemGB>4</driverMemGB> 					
 	<numInstances>4</numInstances> 	
 	<numThreads>4</numThreads>
-  	<numTasks>9</numTasks>
+  	<numTasks>10</numTasks>
 </configuration>

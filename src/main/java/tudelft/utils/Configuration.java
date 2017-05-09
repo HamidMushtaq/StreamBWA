@@ -36,6 +36,7 @@ public class Configuration implements Serializable
 	private String tmpFolder;
 	private String sfFolder;
 	private String numInstances;
+	private String numTasks;
 	private String numThreads;
 	private Long startTime;
 	private String execMemGB;
@@ -59,6 +60,7 @@ public class Configuration implements Serializable
 			tmpFolder = correctFolderName(document.getElementsByTagName("tmpFolder").item(0).getTextContent());
 			sfFolder = correctFolderName(document.getElementsByTagName("sfFolder").item(0).getTextContent());
 			numInstances = document.getElementsByTagName("numInstances").item(0).getTextContent();
+			numTasks = document.getElementsByTagName("numTasks").item(0).getTextContent();
 			numThreads = document.getElementsByTagName("numThreads").item(0).getTextContent();
 			execMemGB = document.getElementsByTagName("execMemGB").item(0).getTextContent();
 			driverMemGB = document.getElementsByTagName("driverMemGB").item(0).getTextContent();
@@ -141,6 +143,11 @@ public class Configuration implements Serializable
 	public String getNumInstances()
 	{
 		return numInstances;
+	}
+	
+	public String getNumTasks()
+	{
+		return numTasks;
 	}
 	
 	public String getNumThreads()

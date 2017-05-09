@@ -54,14 +54,16 @@ import htsjdk.samtools._
 object StreamBWA
 {
 val downloadNeededFiles = false
+val streaming = true
 val compressRDDs = true
 //////////////////////////////////////////////////////////////////////////////
-def bwaRun (chunkName: String, config: Configuration)
+def bwaRun (chunkName: String, config: Configuration) : Int =
 {
 	val x = chunkName.replace(".gz", "")
 	var inputFileName = config.getInputFolder + x + ".gz" 
 	val fqFileName = config.getTmpFolder + x
 	val hdfsManager = new HDFSManager
+	var r = 0
 	
 	var t0 = System.currentTimeMillis
 	
@@ -75,12 +77,29 @@ def bwaRun (chunkName: String, config: Configuration)
 		DownloadManager.downloadBWAFiles("dlbwa/" + x, config)
 	}
 	
-	LogWriter.dbgLog(x, t0, "*\tchunkName = " + chunkName + ", x = " + x + ", inputFileName = " + inputFileName, config)
+	LogWriter.dbgLog(x, t0, "->\tchunkName = " + chunkName + ", x = " + x + ", inputFileName = " + inputFileName, config)
 	
 	if (!Files.exists(Paths.get(FilesManager.getRefFilePath(config))))
 	{
 		LogWriter.dbgLog(x, t0, "#\tReference file " + FilesManager.getRefFilePath(config) + " not found on this node!", config)
-		return
+		return 1
+	}
+	
+	if (streaming)
+	{
+		val fileID = x.replace(".fq", "").toInt
+		while(!hdfsManager.exists(config.getInputFolder + "ulStatus/" + fileID))
+		{
+			if (hdfsManager.exists(config.getInputFolder + "ulStatus/end.txt"))
+			{
+				if (!hdfsManager.exists(config.getInputFolder + "ulStatus/" + fileID))
+				{
+					LogWriter.dbgLog(x, t0, "#\tfileID = " + fileID + ", end.txt exists but this file doesn't!", config)
+					return 1
+				}
+			}
+			Thread.sleep(1000)
+		}
 	}
 	
 	var inputFileBytes: Array[Byte] = null
@@ -96,7 +115,7 @@ def bwaRun (chunkName: String, config: Configuration)
 	val command_str = progName + FilesManager.getRefFilePath(config) + " " + config.getExtraBWAParams + " -t " + config.getNumThreads + " " + fqFileName
 	
 	LogWriter.dbgLog(x, t0, "1\tbwa mem started: " + command_str, config)
-	val bwaOutStr = new StringBuilder(inputFileBytes.size * 2)
+	val bwaOutStr = new StringBuilder((inputFileBytes.size * 1.25).toInt)
 	val logger = ProcessLogger(
 		(o: String) => {bwaOutStr.append(o + '\n')}
 		,
@@ -108,7 +127,8 @@ def bwaRun (chunkName: String, config: Configuration)
 	
 	hdfsManager.writeWholeFile(config.getOutputFolder + x.replace(".fq", ".sam"), bwaOutStr.toString)
 	
-	LogWriter.dbgLog(x, t0, "2\t" + "Content uploaded to the HDFS", config)
+	LogWriter.dbgLog(x, t0, "2\t" + "Content uploaded to the HDFS, r = " + r, config)
+	return r
 }
 
 def main(args: Array[String]) 
@@ -136,48 +156,40 @@ def main(args: Array[String])
 		hdfsManager.create("errorLog.txt")
 	
 	var t0 = System.currentTimeMillis
-	// Spark Listener
-	sc.addSparkListener(new SparkListener() 
-	{
-		override def onApplicationStart(applicationStart: SparkListenerApplicationStart) 
-		{
-			LogWriter.statusLog("SparkListener:", t0, LogWriter.getTimeStamp() + " Spark ApplicationStart: " + applicationStart.appName + "\n", config)
-		}
-
-		override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd) 
-		{
-			LogWriter.statusLog("SparkListener:", t0, LogWriter.getTimeStamp() + " Spark ApplicationEnd: " + applicationEnd.time + "\n", config)
-		}
-
-		override def onStageCompleted(stageCompleted: SparkListenerStageCompleted) 
-		{
-			val map = stageCompleted.stageInfo.rddInfos
-			map.foreach(row => {
-				if (row.isCached)
-				{	
-					LogWriter.statusLog("SparkListener:", t0, LogWriter.getTimeStamp() + " " + row.name + ": memSize = " + (row.memSize / (1024*1024)) + 
-							"MB, diskSize " + row.diskSize + ", numPartitions = " + row.numPartitions + "-" + row.numCachedPartitions, config)
-				}
-				else if (row.name.contains("rdd_"))
-				{
-					LogWriter.statusLog("SparkListener:", t0, LogWriter.getTimeStamp() + " " + row.name + " processed!", config)
-				}
-			})
-		}
-	});
 	//////////////////////////////////////////////////////////////////////////
-	val inputFileNames = FilesManager.getInputFileNames(config.getInputFolder, config).filter(x => x.contains(".fq"))  
-	if (inputFileNames == null)
+	if (!streaming)
 	{
-		println("The input directory " + config.getInputFolder() + " does not exist!")
-		System.exit(1)
+		val inputFileNames = FilesManager.getInputFileNames(config.getInputFolder, config).filter(x => x.contains(".fq"))  
+		if (inputFileNames == null)
+		{
+			println("The input directory " + config.getInputFolder() + " does not exist!")
+			System.exit(1)
+		}
+		inputFileNames.foreach(println)
+		
+		// Give chunks to bwa instances
+		val inputData = sc.parallelize(inputFileNames, inputFileNames.size) 
+		inputData.foreach(x => bwaRun(x, bcConfig.value))
 	}
-	inputFileNames.foreach(println)
-	
-	// Give chunks to bwa instances
-	val inputData = sc.parallelize(inputFileNames, inputFileNames.size) 
-	inputData.foreach(x => bwaRun(x, bcConfig.value))
-	//////////////////////////////////////////////////////////////////////////
+	else
+	{
+		var done = false
+		val parTasks = 1344//config.getNumInstances.toInt * config.getNumTasks.toInt
+		var si = 0
+		var ei = parTasks
+		while(!done)
+		{
+			var indexes = (si until ei).toArray  
+			val inputData = sc.parallelize(indexes, indexes.size)
+			val r = inputData.map(x => bwaRun(x + ".fq.gz", bcConfig.value))
+			val finished = r.filter(_ == 1)
+			if (finished.count > 0)
+				done = true
+			si += parTasks
+			ei += parTasks
+		}
+	}
+	//////////////////////////////////////////////////////////////////////
 	var et = (System.currentTimeMillis - t0) / 1000
 	LogWriter.statusLog("Execution time:", t0, et.toString() + "\tsecs", config)
 }
