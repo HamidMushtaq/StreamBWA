@@ -38,6 +38,7 @@ public class Configuration implements Serializable
 	private String numInstances;
 	private String numTasks;
 	private String numThreads;
+	private String groupSize;
 	private Long startTime;
 	private String execMemGB;
 	private String driverMemGB;
@@ -62,6 +63,7 @@ public class Configuration implements Serializable
 			numInstances = document.getElementsByTagName("numInstances").item(0).getTextContent();
 			numTasks = document.getElementsByTagName("numTasks").item(0).getTextContent();
 			numThreads = document.getElementsByTagName("numThreads").item(0).getTextContent();
+			groupSize = document.getElementsByTagName("groupSize").item(0).getTextContent();
 			execMemGB = document.getElementsByTagName("execMemGB").item(0).getTextContent();
 			driverMemGB = document.getElementsByTagName("driverMemGB").item(0).getTextContent();
 	
@@ -155,6 +157,11 @@ public class Configuration implements Serializable
 		return numThreads;
 	}
 	
+	public String getGroupSize()
+	{
+		return groupSize;
+	}
+	
 	public void setNumInstances(String numInstances)
 	{
 		this.numInstances = numInstances;
@@ -189,6 +196,8 @@ public class Configuration implements Serializable
 		System.out.println("tmpFolder:\t" + tmpFolder);
 		System.out.println("numInstances:\t" + numInstances);
 		System.out.println("numThreads:\t" + numThreads);
+		System.out.println("numTasks:\t" + numTasks);
+		System.out.println("groupSize:\t" + groupSize);
 		System.out.println("execMemGB:\t" + execMemGB);
 		System.out.println("driverMemGB:\t" + driverMemGB);
 		System.out.println("*************************");

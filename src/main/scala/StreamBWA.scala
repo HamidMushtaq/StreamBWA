@@ -174,7 +174,7 @@ def main(args: Array[String])
 	else
 	{
 		var done = false
-		val parTasks = 1344//config.getNumInstances.toInt * config.getNumTasks.toInt
+		val parTasks = config.getGroupSize.toInt
 		var si = 0
 		var ei = parTasks
 		while(!done)
