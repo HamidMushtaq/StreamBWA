@@ -53,12 +53,12 @@ import htsjdk.samtools._
 
 object StreamBWA
 {
-val downloadNeededFiles = false
-val streaming = true
 val compressRDDs = true
 //////////////////////////////////////////////////////////////////////////////
 def bwaRun (chunkName: String, config: Configuration) : Int =
 {
+	val downloadNeededFiles = config.getDownloadRef.toBoolean
+	val streaming = config.getStreaming.toBoolean
 	val x = chunkName.replace(".gz", "")
 	var inputFileName = config.getInputFolder + x + ".gz" 
 	val fqFileName = config.getTmpFolder + x
@@ -74,7 +74,8 @@ def bwaRun (chunkName: String, config: Configuration) : Int =
 	if (downloadNeededFiles)
 	{
 		LogWriter.dbgLog(x, t0, "download\tDownloading reference files for bwa", config)
-		DownloadManager.downloadBWAFiles("dlbwa/" + x, config)
+		if (DownloadManager.downloadBWAFiles(x, config) != 0)
+			return 1
 	}
 	
 	LogWriter.dbgLog(x, t0, "->\tchunkName = " + chunkName + ", x = " + x + ", inputFileName = " + inputFileName, config)
@@ -157,6 +158,7 @@ def main(args: Array[String])
 	
 	var t0 = System.currentTimeMillis
 	//////////////////////////////////////////////////////////////////////////
+	val streaming = config.getStreaming.toBoolean
 	if (!streaming)
 	{
 		val inputFileNames = FilesManager.getInputFileNames(config.getInputFolder, config).filter(x => x.contains(".fq"))  

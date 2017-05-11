@@ -42,6 +42,8 @@ public class Configuration implements Serializable
 	private Long startTime;
 	private String execMemGB;
 	private String driverMemGB;
+	private String streaming;
+	private String downloadRef;
 	
 	public void initialize(String configFile)
 	{	
@@ -66,6 +68,8 @@ public class Configuration implements Serializable
 			groupSize = document.getElementsByTagName("groupSize").item(0).getTextContent();
 			execMemGB = document.getElementsByTagName("execMemGB").item(0).getTextContent();
 			driverMemGB = document.getElementsByTagName("driverMemGB").item(0).getTextContent();
+			streaming = document.getElementsByTagName("streaming").item(0).getTextContent();
+			downloadRef = document.getElementsByTagName("downloadRef").item(0).getTextContent();
 	
 			startTime = System.currentTimeMillis();
 		}
@@ -187,6 +191,16 @@ public class Configuration implements Serializable
 		return execMemGB + "g";
 	}
 	
+	public String getStreaming()
+	{
+		return streaming;
+	}
+	
+	public String getDownloadRef()
+	{
+		return downloadRef;
+	}
+	
 	public void print()
 	{
 		System.out.println("***** Configuration *****");
@@ -200,6 +214,8 @@ public class Configuration implements Serializable
 		System.out.println("groupSize:\t" + groupSize);
 		System.out.println("execMemGB:\t" + execMemGB);
 		System.out.println("driverMemGB:\t" + driverMemGB);
+		System.out.println("streaming:\t" + streaming);
+		System.out.println("downloadRef:\t" + downloadRef);
 		System.out.println("*************************");
 	}
 }

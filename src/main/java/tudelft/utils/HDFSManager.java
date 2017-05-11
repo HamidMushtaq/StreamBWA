@@ -285,6 +285,8 @@ public class HDFSManager
 	{
 		try
 		{	
+			if (!exists(hdfsFolder + fileName))
+				return 1;
 			File f = new File(localFolder + fileName);
 			if (!f.exists())
 			{
@@ -299,12 +301,12 @@ public class HDFSManager
 					fs.copyToLocalFile(new Path(hdfsFolder + fileName), new Path(localFolder + fileName));
 			}
 			
-			return 1;
+			return 0;
 		}
 		catch (IOException ex) 
 		{
 			ex.printStackTrace();
-			return 0;
+			return 2;
 		}
 	}
 	

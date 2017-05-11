@@ -28,9 +28,9 @@ object DownloadManager
 		val hdfsManager = new HDFSManager
 		val fileSize = hdfsManager.getFileSize(filePath)
 		
-		LogWriter.dbgLog(x, 0, "#1\tfilePath = " + filePath + ", fileSize = " + fileSize, config)
-		try{("gunzip " + config.getTmpFolder + fileName + ".gz").!}
-		catch{case e: Exception => LogWriter.dbgLog(x, 0, "#gunzip\nEither already unzipped or some other thread is unzipping it!", config)}
+		LogWriter.dbgLog(x, 0, "gunzip\tfilePath = " + filePath + ", fileSize = " + fileSize, config)
+		try{("gunzip " + config.getSfFolder + fileName + ".gz").!}
+		catch{case e: Exception => LogWriter.dbgLog(x, 0, "gunzip\tEither already unzipped or some other thread is unzipping it!", config)}
 		val f = new File(config.getTmpFolder + fileName)
 		@volatile var flen = f.length
 		
@@ -38,12 +38,12 @@ object DownloadManager
 		while(flen != fileSize)
 		{
 			if ((iter % 10) == 0)
-				LogWriter.dbgLog(x, 0, "#2\tflen = " + flen + ", fileSize = " + fileSize, config)
+				LogWriter.dbgLog(x, 0, "gunzip\t(flen != fileSize) -> flen = " + flen + ", fileSize = " + fileSize, config)
 			iter += 1
 			Thread.sleep(1000)
 			flen = f.length
 		}
-		LogWriter.dbgLog(x, 0, "#3\tflen = " + flen + ", fileSize = " + fileSize, config)
+		LogWriter.dbgLog(x, 0, "gunzip\t(flen == fileSize) -> flen = " + flen + ", fileSize = " + fileSize, config)
 		
 		return flen
 	}
@@ -58,31 +58,100 @@ object DownloadManager
 		return f.exists && (f.length == fileSize)
 	}
 
-	def downloadBWAFiles(x: String, config: Configuration)
+	def downloadBWAFiles(x: String, config: Configuration) : Int = 
 	{
-		val refFolder = FilesManager.getDirFromPath(config.getRefPath())
-		val refFileName = FilesManager.getFileNameFromPath(config.getRefPath())
+		val refFolder = FilesManager.getDirFromPath(config.getRefPath)
+		val refFileName = FilesManager.getFileNameFromPath(config.getRefPath)
 		val hdfsManager = new HDFSManager
+		var r = 0
 		
 		if (!(new File(config.getSfFolder).exists))
 			new File(config.getSfFolder()).mkdirs()
 		
-		if (!fileToDownloadAlreadyExists(config.getRefPath, config))
+		// If there is a zipped version of this file, use that to reduce downloaded data
+		if (hdfsManager.exists(config.getRefPath + ".gz"))
 		{
-			hdfsManager.downloadIfRequired(refFileName + ".gz", refFolder, config.getSfFolder);
-			gunZipDownloadedFile(x, config.getRefPath, config)
+			if (!fileToDownloadAlreadyExists(config.getRefPath, config))
+			{
+				LogWriter.dbgLog(x, 0, "download\tDownloading zipped ref file", config)
+			
+				r = hdfsManager.downloadIfRequired(refFileName + ".gz", refFolder, config.getSfFolder)
+				if (r != 0)
+				{
+					LogWriter.dbgLog(x, 0, "download\tError reading " + refFileName + ".gz from the HDFS folder " + refFolder + ". Error code = " + r, config)
+					return 1
+				}
+				gunZipDownloadedFile(x, config.getRefPath, config)
+			}
 		}
-		hdfsManager.downloadIfRequired(refFileName.replace(".fasta", ".dict"), refFolder, config.getSfFolder)
-		hdfsManager.downloadIfRequired(refFileName + ".amb", refFolder, config.getSfFolder)
-		hdfsManager.downloadIfRequired(refFileName + ".ann", refFolder, config.getSfFolder)
-		if (!fileToDownloadAlreadyExists(config.getRefPath + ".bwt", config))
+		else
 		{
-			hdfsManager.downloadIfRequired(refFileName + ".bwt.gz", refFolder, config.getSfFolder);
-			gunZipDownloadedFile(x, config.getRefPath + ".bwt", config)
+			LogWriter.dbgLog(x, 0, "download\tDownloading unzipped ref file", config)
+			if (hdfsManager.downloadIfRequired(refFileName, refFolder, config.getSfFolder) != 0)
+			{
+				LogWriter.dbgLog(x, 0, "download\tError reading " + refFileName + " from the HDFS folder " + refFolder, config)
+				return 1
+			}
 		}
-		hdfsManager.downloadIfRequired(refFileName + ".fai", refFolder, config.getSfFolder)
-		hdfsManager.downloadIfRequired(refFileName + ".pac", refFolder, config.getSfFolder)
-		hdfsManager.downloadIfRequired(refFileName + ".sa", refFolder, config.getSfFolder)
+		LogWriter.dbgLog(x, 0, "download\tDownloading dict, amb and ann files", config)
+		if (hdfsManager.downloadIfRequired(refFileName.replace(".fasta", ".dict"), refFolder, config.getSfFolder) != 0)
+		{
+			LogWriter.dbgLog(x, 0, "download\tError reading " + refFileName.replace(".fasta", ".dict") + " from the HDFS folder " + refFolder, config)
+			return 1
+		}
+		if (hdfsManager.downloadIfRequired(refFileName + ".amb", refFolder, config.getSfFolder) != 0)
+		{
+			LogWriter.dbgLog(x, 0, "download\tError reading " + refFileName + ".amb from the HDFS folder " + refFolder, config)
+			return 1
+		}
+		if (hdfsManager.downloadIfRequired(refFileName + ".ann", refFolder, config.getSfFolder) != 0)
+		{
+			LogWriter.dbgLog(x, 0, "download\tError reading " + refFileName + ".ann from the HDFS folder " + refFolder, config)
+			return 1
+		}
+		// If there is a zipped version of this file, use that to reduce downloaded data
+		if (hdfsManager.exists(config.getRefPath + ".bwt.gz"))
+		{
+			if (!fileToDownloadAlreadyExists(config.getRefPath + ".bwt", config))
+			{
+				LogWriter.dbgLog(x, 0, "download\tDownloading zipped ref bwt file", config)
+			
+				r = hdfsManager.downloadIfRequired(refFileName + ".bwt.gz", refFolder, config.getSfFolder);
+				if (r != 0)
+				{
+					LogWriter.dbgLog(x, 0, "download\tError reading " + refFileName + ".gz from the HDFS folder " + refFolder + ". Error code = " + r, config)
+					return 1
+				}
+				gunZipDownloadedFile(x, config.getRefPath + ".bwt", config)
+			}
+		}
+		else
+		{
+			LogWriter.dbgLog(x, 0, "download\tDownloading unzipped ref bwt file", config)
+			if (hdfsManager.downloadIfRequired(refFileName + ".bwt", refFolder, config.getSfFolder) != 0)
+			{
+				LogWriter.dbgLog(x, 0, "download\tError reading " + refFileName + ".bwt from the HDFS folder " + refFolder, config)
+				return 1
+			}
+		}
+		LogWriter.dbgLog(x, 0, "download\tDownloading fai, pac and sa files", config)
+		if (hdfsManager.downloadIfRequired(refFileName + ".fai", refFolder, config.getSfFolder) != 0)
+		{
+			LogWriter.dbgLog(x, 0, "download\tError reading " + refFileName + ".fai from the HDFS folder " + refFolder, config)
+			return 1
+		}
+		if (hdfsManager.downloadIfRequired(refFileName + ".pac", refFolder, config.getSfFolder) != 0)
+		{
+			LogWriter.dbgLog(x, 0, "download\tError reading " + refFileName + ".pac from the HDFS folder " + refFolder, config)
+			return 1
+		}
+		if (hdfsManager.downloadIfRequired(refFileName + ".sa", refFolder, config.getSfFolder) != 0)
+		{
+			LogWriter.dbgLog(x, 0, "download\tError reading " + refFileName + ".sa from the HDFS folder " + refFolder, config)
+			return 1
+		}
+		
+		return 0
 	}
 
 	def downloadDictFile(config: Configuration)
