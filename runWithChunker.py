@@ -9,6 +9,7 @@ import os
 import time
 import subprocess
 import multiprocessing
+import glob
 
 USE_YARN_CLIENT_FOR_HADOOP = True
 
@@ -37,6 +38,7 @@ refPath = doc.getElementsByTagName("refPath")[0].firstChild.data
 inputFolder = doc.getElementsByTagName("inputFolder")[0].firstChild.data
 outputFolder = doc.getElementsByTagName("outputFolder")[0].firstChild.data
 tmpFolder = doc.getElementsByTagName("tmpFolder")[0].firstChild.data
+toolsFolder = doc.getElementsByTagName("toolsFolder")[0].firstChild.data
 numInstances = doc.getElementsByTagName("numInstances")[0].firstChild.data
 numTasks = doc.getElementsByTagName("numTasks")[0].firstChild.data
 exe_mem = doc.getElementsByTagName("execMemGB")[0].firstChild.data + "g"
@@ -50,12 +52,27 @@ outputFolderChunker = doc.getElementsByTagName("outputFolder")[0].firstChild.dat
 driver_mem_chunker = doc.getElementsByTagName("driverMemGB")[0].firstChild.data + "g"
 
 def executeStreamBWA():	
+	if not (os.path.exists(toolsFolder) and os.path.isdir(toolsFolder)):
+		print "The specified tools folder (" + toolsFolder + ") doesn't exist!"
+		sys.exit(1)
+	else:
+		bwaPath = toolsFolder + "/bwa"
+		if not os.path.exists(bwaPath):
+			print "The bwa executable (" + bwaPath + ") is not found!"
+			sys.exit(1)
+		
 	if USE_YARN_CLIENT_FOR_HADOOP:
 		os.system('cp ' + configFilePath + ' ./')
 		if not os.path.exists(tmpFolder):
 			os.makedirs(tmpFolder)
+			
+	tools = glob.glob(toolsFolder + '/*')
+	toolsStr = ''
+	for t in tools:
+		toolsStr = toolsStr + t + ','
+	toolsStr = toolsStr[0:-1]
 	
-	diff_str = "yarn-client" if USE_YARN_CLIENT_FOR_HADOOP else ("yarn-cluster --files " + configFilePath + "," + dictPath)
+	diff_str = ("yarn-client --files " + toolsStr) if USE_YARN_CLIENT_FOR_HADOOP else ("yarn-cluster --files " + configFilePath + "," + toolsStr)
 	
 	cmdStr = "$SPARK_HOME/bin/spark-submit " + \
 	"--class \"StreamBWA\" --master " + diff_str + " " + \
@@ -90,8 +107,8 @@ if outputFolderChunker != inputFolder:
 	sys.exit(1)
 	
 # Remove the HDFS folders
-os.system("hadoop fs -rm -r -f " + inputFolder)
-os.system("hadoop fs -rm -r -f " + outputFolder)
+os.system("hadoop fs -rm -r -f -skipTrash " + inputFolder)
+os.system("hadoop fs -rm -r -f -skipTrash " + outputFolder)
 # Start chunker
 job1 = multiprocessing.Process(target=executeChunker)
 job1.start()
