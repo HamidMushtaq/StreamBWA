@@ -31,16 +31,15 @@ public class Configuration implements Serializable
 	private String inputFolder;
 	private String outputFolder;
 	private String toolsFolder;
-	private String rgString;
 	private String extraBWAParams;
 	private String tmpFolder;
 	private String sfFolder;
 	private String numInstances;
 	private String numTasks;
-	private String numThreads;
 	private String groupSize;
 	private Long startTime;
 	private String execMemGB;
+	private String interleaved;
 	private String driverMemGB;
 	private String streaming;
 	private String downloadRef;
@@ -58,15 +57,14 @@ public class Configuration implements Serializable
 			inputFolder = correctFolderName(document.getElementsByTagName("inputFolder").item(0).getTextContent());
 			outputFolder = correctFolderName(document.getElementsByTagName("outputFolder").item(0).getTextContent());
 			toolsFolder = correctFolderName(document.getElementsByTagName("toolsFolder").item(0).getTextContent());
-			rgString = document.getElementsByTagName("rgString").item(0).getTextContent();
 			extraBWAParams = document.getElementsByTagName("extraBWAParams").item(0).getTextContent();
 			tmpFolder = correctFolderName(document.getElementsByTagName("tmpFolder").item(0).getTextContent());
 			sfFolder = correctFolderName(document.getElementsByTagName("sfFolder").item(0).getTextContent());
 			numInstances = document.getElementsByTagName("numInstances").item(0).getTextContent();
 			numTasks = document.getElementsByTagName("numTasks").item(0).getTextContent();
-			numThreads = document.getElementsByTagName("numThreads").item(0).getTextContent();
 			groupSize = document.getElementsByTagName("groupSize").item(0).getTextContent();
 			execMemGB = document.getElementsByTagName("execMemGB").item(0).getTextContent();
+			interleaved = document.getElementsByTagName("interleaved").item(0).getTextContent();
 			driverMemGB = document.getElementsByTagName("driverMemGB").item(0).getTextContent();
 			streaming = document.getElementsByTagName("streaming").item(0).getTextContent();
 			downloadRef = document.getElementsByTagName("downloadRef").item(0).getTextContent();
@@ -117,23 +115,10 @@ public class Configuration implements Serializable
 	{
 		return toolsFolder;
 	}
-	
-	public String getRGString()
-	{
-		return rgString;
-	}
-	
+
 	public String getExtraBWAParams()
 	{
 		return extraBWAParams;
-	}
-	
-	public String getRGID()
-	{
-		int start = rgString.indexOf("ID:");
-		int end = rgString.indexOf("\\", start);
-		
-		return rgString.substring(start+3, end);
 	}
 	
 	public String getTmpFolder()
@@ -156,11 +141,6 @@ public class Configuration implements Serializable
 		return numTasks;
 	}
 	
-	public String getNumThreads()
-	{
-		return numThreads;
-	}
-	
 	public String getGroupSize()
 	{
 		return groupSize;
@@ -171,11 +151,6 @@ public class Configuration implements Serializable
 		this.numInstances = numInstances;
 	}
 	
-	public void setNumThreads(String numThreads)
-	{
-		this.numThreads = numThreads;
-	}
-
 	public Long getStartTime()
 	{
 		return startTime;
@@ -189,6 +164,11 @@ public class Configuration implements Serializable
 	public String getExecMemGB()
 	{
 		return execMemGB + "g";
+	}
+	
+	public String getInterleaved()
+	{
+		return interleaved;
 	}
 	
 	public String getStreaming()
@@ -209,7 +189,6 @@ public class Configuration implements Serializable
 		System.out.println("outputFolder:\t" + outputFolder);
 		System.out.println("tmpFolder:\t" + tmpFolder);
 		System.out.println("numInstances:\t" + numInstances);
-		System.out.println("numThreads:\t" + numThreads);
 		System.out.println("numTasks:\t" + numTasks);
 		System.out.println("groupSize:\t" + groupSize);
 		System.out.println("execMemGB:\t" + execMemGB);

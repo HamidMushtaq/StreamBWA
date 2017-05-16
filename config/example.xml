@@ -3,17 +3,16 @@
 	<refPath>filesB37/human_g1k_v37_decoy.fasta</refPath>
 	<inputFolder>wg_chunks</inputFolder>
 	<outputFolder>bwaOut</outputFolder> 
-	<toolsFolder>power8tools</toolsFolder>
 	<tmpFolder>/tmp/spark</tmpFolder>
   	<sfFolder>/tmp/spark</sfFolder>
-	<rgString>@RG\tID:sample_lane\tSM:sample\tPL:illumina\tLB:sample\tPU:lane</rgString>
-	<extraBWAParams>-p</extraBWAParams>
+	<toolsFolder>tools</toolsFolder>
+	<extraBWAParams>-t 4 -R @RG\tID:sample_lane\tSM:sample\tPL:illumina\tLB:sample\tPU:lane</extraBWAParams>
+	<interleaved>false</interleaved> <!-- The program will insert the -p flag if interleaved is set to true -->
 	<execMemGB>112</execMemGB> 						
 	<driverMemGB>4</driverMemGB> 					
 	<numInstances>4</numInstances> 	
-	<numThreads>4</numThreads>
-  	<numTasks>8</numTasks>
-	<groupSize>1344</groupSize>
-	<streaming>false</streaming>
+	<numTasks>8</numTasks>
+	<groupSize>700</groupSize>
+	<streaming>true</streaming>
 	<downloadRef>true</downloadRef>
 </configuration>

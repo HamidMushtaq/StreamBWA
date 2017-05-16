@@ -5,6 +5,7 @@
 	<compLevel>4</compLevel>
 	<chunkSizeMB>60</chunkSizeMB>
 	<blockSizeMB>8</blockSizeMB>
-	<driverMemGB>16</driverMemGB> 					
+	<driverMemGB>32</driverMemGB> 					
 	<numThreads>32</numThreads>
+	<interleave>false</interleave>
 </configuration>
