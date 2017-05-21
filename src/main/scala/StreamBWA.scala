@@ -60,10 +60,12 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 {
 	val downloadNeededFiles = config.getDownloadRef.toBoolean
 	val interleaved = config.getInterleaved.toBoolean
+	val singleEnded = config.getSingleEnded.toBoolean
+	val singleFile = interleaved || singleEnded
 	val streaming = config.getStreaming.toBoolean
 	val x = chunkNum.toString
-	val inputFileName = if (interleaved) (x + ".fq.gz") else (x + "-1.fq.gz")
-	val inputFileName2: String = if (interleaved) null else (x + "-2.fq.gz")
+	val inputFileName = if (singleFile) (x + ".fq.gz") else (x + "-1.fq.gz")
+	val inputFileName2: String = if (singleFile) null else (x + "-2.fq.gz")
 	val hdfsManager = new HDFSManager
 	var r = 0
 	
@@ -87,7 +89,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 			return 1
 	}
 	
-	LogWriter.dbgLog(x, t0, ".\tinputFileName = " + inputFileName + ", interleaved = " + interleaved + ", streaming = " + streaming, config)
+	LogWriter.dbgLog(x, t0, ".\tinputFileName = " + inputFileName + ", singleFile = " + singleFile + ", streaming = " + streaming, config)
 	
 	if (!Files.exists(Paths.get(FilesManager.getRefFilePath(config))))
 	{
@@ -111,8 +113,8 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 		}
 	}
 		
-	var fqFileName = if (interleaved) (config.getTmpFolder + chunkNum + ".fq") else (config.getTmpFolder + chunkNum + "-1.fq")
-	var fqFileName2: String = if (interleaved) null else (config.getTmpFolder + chunkNum + "-2.fq") 
+	var fqFileName = if (singleFile) (config.getTmpFolder + chunkNum + ".fq") else (config.getTmpFolder + chunkNum + "-1.fq")
+	var fqFileName2: String = if (singleFile) null else (config.getTmpFolder + chunkNum + "-2.fq") 
 	
 	// Create fastq1.fq file
 	hdfsManager.download(inputFileName, config.getInputFolder, config.getTmpFolder, false)
@@ -132,10 +134,10 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 	}
 	
 	// bwa mem input_files_directory/fasta_file.fasta -p -t 2 x.fq > out_file
-	val command_str = "./bwa mem " + (if (interleaved) "-p " else "") + FilesManager.getRefFilePath(config) + " " + 
+	val command_str = "./bwa mem " + (if (interleaved && !singleEnded) "-p " else "") + FilesManager.getRefFilePath(config) + " " + 
 		config.getExtraBWAParams.replace("\t", "\\t") + " " + fqFileName + (if (fqFileName2 != null) (" " + fqFileName2) else "")
 	val fqFileSize = new File(fqFileName).length
-	val inputSize = if (interleaved) (fqFileSize) else (fqFileSize*2)
+	val inputSize = if (singleFile) (fqFileSize) else (fqFileSize*2)
 	
 	LogWriter.dbgLog(x, t0, "1\tbwa mem started: " + command_str + ". Input file size = " + (inputSize/(1024*1024)) + " MB", config)
 	//////////////////////////////////////////////////////////////////////////

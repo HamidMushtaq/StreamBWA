@@ -39,6 +39,7 @@ public class Configuration implements Serializable
 	private String groupSize;
 	private Long startTime;
 	private String execMemGB;
+	private String singleEnded;
 	private String interleaved;
 	private String driverMemGB;
 	private String streaming;
@@ -64,6 +65,7 @@ public class Configuration implements Serializable
 			numTasks = document.getElementsByTagName("numTasks").item(0).getTextContent();
 			groupSize = document.getElementsByTagName("groupSize").item(0).getTextContent();
 			execMemGB = document.getElementsByTagName("execMemGB").item(0).getTextContent();
+			singleEnded = document.getElementsByTagName("singleEnded").item(0).getTextContent();
 			interleaved = document.getElementsByTagName("interleaved").item(0).getTextContent();
 			driverMemGB = document.getElementsByTagName("driverMemGB").item(0).getTextContent();
 			streaming = document.getElementsByTagName("streaming").item(0).getTextContent();
@@ -164,6 +166,11 @@ public class Configuration implements Serializable
 	public String getExecMemGB()
 	{
 		return execMemGB + "g";
+	}
+	
+	public String getSingleEnded()
+	{
+		return singleEnded;
 	}
 	
 	public String getInterleaved()
