@@ -181,7 +181,7 @@ def appendSAM(line: String, chunkNum: Int, config: Configuration, hdfsManager: H
 	{
 		val fields = line.split('\t')
 		var id: String = "0"
-		val regionLen = config.getChrRegionLength.toInt
+		val regionLen = config.getChrRegionLength
 		val chrID = fields(2)
 		
 		if (regionLen != 0)
@@ -194,7 +194,7 @@ def appendSAM(line: String, chunkNum: Int, config: Configuration, hdfsManager: H
 					id = chrID
 				else
 				{
-					val pos = fields(3).toInt
+					val pos = fields(3).toLong
 					val region = pos / regionLen
 					id = chrID + '-' + region
 				}

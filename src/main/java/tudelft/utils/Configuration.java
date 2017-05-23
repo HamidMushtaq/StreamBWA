@@ -48,7 +48,7 @@ public class Configuration implements Serializable
 	private boolean combinedFileIsLocal;
 	private boolean makeCombinedFile;
 	private String writeHeaderSep;
-	private String chrRegionLength;
+	private Long chrRegionLength;
 	
 	public void initialize(String configFile)
 	{	
@@ -81,7 +81,9 @@ public class Configuration implements Serializable
 				combinedFilesFolder = combinedFilesFolder.substring(6);
 			writeHeaderSep = document.getElementsByTagName("writeHeaderSeparately").item(0).getTextContent();	
 			makeCombinedFile = !combinedFilesFolder.trim().equals("");
-			chrRegionLength = document.getElementsByTagName("chrRegionLength").item(0).getTextContent();
+			String chrRegionLengthStr = document.getElementsByTagName("chrRegionLength").item(0).getTextContent();
+			float chrRegionLengthF = Float.valueOf(chrRegionLengthStr);
+			chrRegionLength = (long)chrRegionLengthF;
 		
 			startTime = System.currentTimeMillis();
 		}
@@ -220,7 +222,7 @@ public class Configuration implements Serializable
 		return writeHeaderSep;
 	}
 	
-	public String getChrRegionLength()
+	public long getChrRegionLength()
 	{
 		return chrRegionLength;
 	}
