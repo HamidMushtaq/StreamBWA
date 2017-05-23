@@ -1,0 +1,24 @@
+<configuration>
+	<refPath>filesB37/human_g1k_v37_decoy.fasta</refPath>
+	<inputFolder>wg_chunks</inputFolder>
+	<outputFolder>bwaOut</outputFolder> 
+	<tmpFolder>/tmp/spark</tmpFolder>
+  	<sfFolder>/tmp/spark</sfFolder>
+	<toolsFolder>tools</toolsFolder>
+	<!--<extraBWAParams>-t 4 -R @RG\tID:sample_lane\tSM:sample\tPL:illumina\tLB:sample\tPU:lane</extraBWAParams> -->
+	<extraBWAParams>-M -t 4</extraBWAParams>
+	<singleEnded>true</singleEnded>
+	<!-- The program will insert the -p flag itself if interleaved is set to true and singleEnded is set to false -->
+	<interleaved>false</interleaved> 
+	<execMemGB>112</execMemGB> 						
+	<driverMemGB>4</driverMemGB> 					
+	<numInstances>4</numInstances> 	
+	<numTasks>8</numTasks>
+	<groupSize>1792</groupSize>
+	<streaming>true</streaming>
+	<downloadRef>false</downloadRef>
+	<!-- leave this field empty if you do not want a combined SAM file -->
+	<combinedFilePath>combinedSAM.sam</combinedFilePath>
+	<!-- This field is only used in the case of a combined SAM file -->
+	<writeHeaderSeparately>true</writeHeaderSeparately>
+</configuration>

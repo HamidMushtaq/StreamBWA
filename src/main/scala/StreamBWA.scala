@@ -42,6 +42,10 @@ import scala.concurrent.forkjoin._
 import scala.collection.parallel.ForkJoinTaskSupport
 import scala.util.Random
 
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
+
 import tudelft.utils._
 import utils._
 
@@ -155,9 +159,80 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 		new File(fqFileName2).delete
 	
 	hdfsManager.writeWholeFile(config.getOutputFolder + chunkNum + ".sam", bwaOutStr.toString)
+	if (config.getMakeCombinedFile)
+		hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/" + chunkNum.toString, "")
 	
 	LogWriter.dbgLog(x, t0, "2\t" + "Content uploaded to the HDFS, r = " + r, config)
 	return r
+}
+/*
+def combineChunks(config: Configuration)
+{
+	var chunkNum = 0
+	var done = false 
+	val hdfsManager = new HDFSManager
+	val pw: PrintWriter = {
+		if (config.getCombinedFileIsLocal) 
+			new PrintWriter(new FileOutputStream(new File(config.getCombinedFilePath)))
+		else 
+			hdfsManager.open(config.getCombinedFilePath)
+	}
+	
+	while(!done)
+	{
+		while(!done && !hdfsManager.exists(config.getOutputFolder + "ulStatus/" + chunkNum))
+		{
+			if (hdfsManager.exists(config.getOutputFolder + "ulStatus/end.txt"))
+			{
+				if (!hdfsManager.exists(config.getOutputFolder + "ulStatus/" + chunkNum))
+					done = true
+			}
+			Thread.sleep(1000)
+		}
+		if (!done)
+		{
+			pw.write(hdfsManager.readWholeFile(config.getOutputFolder + chunkNum + ".sam"))
+			hdfsManager.writeWholeFile(config.getOutputFolder + "combined/" + chunkNum, "")
+			chunkNum += 1
+		}
+	}
+	
+	pw.close
+}
+*/
+
+def combineChunks(config: Configuration)
+{
+	var chunkNum = 0
+	var done = false 
+	val hdfsManager = new HDFSManager
+	val os: OutputStream = {
+		if (config.getCombinedFileIsLocal) 
+			new FileOutputStream(new File(config.getCombinedFilePath))
+		else 
+			hdfsManager.openStream(config.getCombinedFilePath)
+	}
+	
+	while(!done)
+	{
+		while(!done && !hdfsManager.exists(config.getOutputFolder + "ulStatus/" + chunkNum))
+		{
+			if (hdfsManager.exists(config.getOutputFolder + "ulStatus/end.txt"))
+			{
+				if (!hdfsManager.exists(config.getOutputFolder + "ulStatus/" + chunkNum))
+					done = true
+			}
+			Thread.sleep(1000)
+		}
+		if (!done)
+		{
+			os.write(hdfsManager.readBytes(config.getOutputFolder + chunkNum + ".sam"))
+			hdfsManager.writeWholeFile(config.getOutputFolder + "combined/" + chunkNum, "")
+			chunkNum += 1
+		}
+	}
+	
+	os.close
 }
 
 def main(args: Array[String]) 
@@ -178,6 +253,8 @@ def main(args: Array[String])
 	//Logger.getLogger("akka").setLevel(Level.OFF);
 	
 	config.print() 
+	val makeCombinedFile = config.getMakeCombinedFile
+	var f: Future[Unit] = null
 	
 	if (!hdfsManager.exists("sparkLog.txt"))
 		hdfsManager.create("sparkLog.txt")
@@ -187,6 +264,9 @@ def main(args: Array[String])
 	var t0 = System.currentTimeMillis
 	//////////////////////////////////////////////////////////////////////////
 	val streaming = config.getStreaming.toBoolean
+	if (makeCombinedFile)
+		f = Future {combineChunks(config)}
+	
 	if (!streaming)
 	{
 		val inputFileNames = FilesManager.getInputFileNames(config.getInputFolder, config).filter(x => x.contains(".fq")) 
@@ -199,6 +279,7 @@ def main(args: Array[String])
 		
 		// Give chunks to bwa instances
 		val inputFileNumbers = inputFileNames.map(x => {val a = x.split('.'); val b = a(0).split('-'); b(0).toInt}).toSet.toArray
+		scala.util.Sorting.quickSort(inputFileNumbers)
 		val inputData = sc.parallelize(inputFileNumbers, inputFileNumbers.size) 
 		inputData.foreach(x => bwaRun(x, bcConfig.value))
 	}
@@ -222,7 +303,14 @@ def main(args: Array[String])
 	}
 	//////////////////////////////////////////////////////////////////////
 	var et = (System.currentTimeMillis - t0) / 1000
-	LogWriter.statusLog("Execution time:", t0, et.toString() + "\tsecs", config)
+	LogWriter.statusLog("Execution time of streambwa:", t0, et.toString() + "\tsecs", config)
+	if (makeCombinedFile)
+	{
+		hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/end.txt", "")
+		Await.result(f, Duration.Inf)
+	}
+	et = (System.currentTimeMillis - t0) / 1000
+	LogWriter.statusLog("Total execution time:", t0, et.toString() + "\tsecs", config)
 }
 //////////////////////////////////////////////////////////////////////////////
 } // End of Class definition

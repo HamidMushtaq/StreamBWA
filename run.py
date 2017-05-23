@@ -13,15 +13,14 @@ import glob
 
 USE_YARN_CLIENT_FOR_HADOOP = True
 
-if len(sys.argv) < 2:
+if len(sys.argv) < 3:
 	print("Not enough arguments!")
-	print("Example of usage: ./runPart.py config.xml")
+	print("Example of usage: ./runPart.py streambwa_2.11-1.0.jar config.xml")
 	sys.exit(1)
 
-exeName = "target/scala-2.11/streambwa_2.11-1.0.jar"
-#exeName = "streambwa_2.11-1.0.jar"
+exeName = sys.argv[1]
 logFile = "time.txt"
-configFilePath = sys.argv[1]
+configFilePath = sys.argv[2]
 
 if not os.path.isfile(configFilePath):
 	print("Config file " + configFilePath + " does not exist!")

@@ -44,6 +44,10 @@ public class Configuration implements Serializable
 	private String driverMemGB;
 	private String streaming;
 	private String downloadRef;
+	private String combinedFilePath;
+	private boolean makeCombinedFile;
+	private boolean combinedFileIsLocal;
+	private String writeHeaderSep;
 	
 	public void initialize(String configFile)
 	{	
@@ -70,7 +74,13 @@ public class Configuration implements Serializable
 			driverMemGB = document.getElementsByTagName("driverMemGB").item(0).getTextContent();
 			streaming = document.getElementsByTagName("streaming").item(0).getTextContent();
 			downloadRef = document.getElementsByTagName("downloadRef").item(0).getTextContent();
-	
+			combinedFilePath = document.getElementsByTagName("combinedFilePath").item(0).getTextContent();
+			combinedFileIsLocal = combinedFilePath.startsWith("local:");
+			if (combinedFileIsLocal)
+				combinedFilePath = combinedFilePath.substring(6);
+			writeHeaderSep = document.getElementsByTagName("writeHeaderSeparately").item(0).getTextContent();	
+			makeCombinedFile = !combinedFilePath.trim().equals("");
+		
 			startTime = System.currentTimeMillis();
 		}
 		catch(Exception e)
@@ -186,6 +196,26 @@ public class Configuration implements Serializable
 	public String getDownloadRef()
 	{
 		return downloadRef;
+	}
+	
+	public String getCombinedFilePath()
+	{
+		return combinedFilePath;
+	}
+	
+	public boolean getMakeCombinedFile()
+	{
+		return makeCombinedFile;
+	}
+	
+	public boolean getCombinedFileIsLocal()
+	{
+		return combinedFileIsLocal;
+	}
+	
+	public String getWriteHeaderSep()
+	{
+		return writeHeaderSep;
 	}
 	
 	public void print()

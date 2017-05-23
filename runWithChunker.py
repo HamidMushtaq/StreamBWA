@@ -13,17 +13,16 @@ import glob
 
 USE_YARN_CLIENT_FOR_HADOOP = True
 
-if len(sys.argv) < 3:
+if len(sys.argv) < 4:
 	print("Not enough arguments!")
-	print("Example of usage: ./runPart.py config.xml chunkerConfig.xml")
+	print("Example of usage: ./runPart.py streambwa_2.11-1.0.jar config.xml chunkerConfig.xml")
 	sys.exit(1)
 
-exeName = "target/scala-2.11/streambwa_2.11-1.0.jar"
-#exeName = "streambwa_2.11-1.0.jar"
+exeName = sys.argv[1]
 chunkerExeName = "chunker_2.11-1.0.jar"
 logFile = "time.txt"
-configFilePath = sys.argv[1]
-chunkerConfigFilePath = sys.argv[2]
+configFilePath = sys.argv[2]
+chunkerConfigFilePath = sys.argv[3]
 
 if not os.path.isfile(configFilePath):
 	print("Config file " + configFilePath + " does not exist!")
@@ -89,7 +88,7 @@ def executeStreamBWA():
 	
 def executeChunker():
 	cmdStr = "$SPARK_HOME/bin/spark-submit " + \
-	"--class \"Chunker\" --master local[*] --driver-memory " + driver_mem_chunker + " " + chunkerExeName + " " + chunkerConfigFilePath
+	"--class \"hmushtaq.fastqchunker.Chunker\" --master local[*] --driver-memory " + driver_mem_chunker + " " + chunkerExeName + " " + chunkerConfigFilePath
 	
 	print cmdStr
 	os.system(cmdStr)
