@@ -145,9 +145,10 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 	
 	LogWriter.dbgLog(x, t0, "1\tbwa mem started: " + command_str + ". Input file size = " + (inputSize/(1024*1024)) + " MB", config)
 	//////////////////////////////////////////////////////////////////////////
-	val bwaOutStr = new StringBuilder((inputSize * 1.25).toInt)
+	val pwMap = new scala.collection.mutable.HashMap[String, PrintWriter]
 	val logger = ProcessLogger(
-		(o: String) => {bwaOutStr.append(o + '\n')}
+		//(o: String) => {bwaOutStr.append(o + '\n')}
+		(o: String) => {appendSAM(o + '\n', chunkNum, config, hdfsManager, pwMap)}
 		,
 		(e: String) => {} // do nothing
 	)
@@ -157,62 +158,70 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 	new File(fqFileName).delete
 	if (fqFileName2 != null)
 		new File(fqFileName2).delete
+		
+	for ((k,v) <- pwMap)
+		v.close
 	
-	hdfsManager.writeWholeFile(config.getOutputFolder + chunkNum + ".sam", bwaOutStr.toString)
 	if (config.getMakeCombinedFile)
 		hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/" + chunkNum.toString, "")
 	
 	LogWriter.dbgLog(x, t0, "2\t" + "Content uploaded to the HDFS, r = " + r, config)
 	return r
 }
-/*
-def combineChunks(config: Configuration)
+
+def appendSAM(line: String, chunkNum: Int, config: Configuration, hdfsManager: HDFSManager, pwMap: scala.collection.mutable.HashMap[String, PrintWriter]) 
 {
-	var chunkNum = 0
-	var done = false 
-	val hdfsManager = new HDFSManager
-	val pw: PrintWriter = {
-		if (config.getCombinedFileIsLocal) 
-			new PrintWriter(new FileOutputStream(new File(config.getCombinedFilePath)))
-		else 
-			hdfsManager.open(config.getCombinedFilePath)
-	}
-	
-	while(!done)
+	if (line(0) == '@')
 	{
-		while(!done && !hdfsManager.exists(config.getOutputFolder + "ulStatus/" + chunkNum))
-		{
-			if (hdfsManager.exists(config.getOutputFolder + "ulStatus/end.txt"))
-			{
-				if (!hdfsManager.exists(config.getOutputFolder + "ulStatus/" + chunkNum))
-					done = true
-			}
-			Thread.sleep(1000)
-		}
-		if (!done)
-		{
-			pw.write(hdfsManager.readWholeFile(config.getOutputFolder + chunkNum + ".sam"))
-			hdfsManager.writeWholeFile(config.getOutputFolder + "combined/" + chunkNum, "")
-			chunkNum += 1
-		}
+		if (!pwMap.contains("header"))
+			pwMap.put("header", hdfsManager.open(config.getOutputFolder + "sam/" + chunkNum + "/header"))
+		pwMap("header").write(line)
 	}
-	
-	pw.close
+	else
+	{
+		val fields = line.split('\t')
+		var id: String = "0"
+		val regionLen = config.getChrRegionLength.toInt
+		val chrID = fields(2)
+		
+		if (regionLen != 0)
+		{
+			if (chrID == "*")
+				id = "unmapped"
+			else
+			{
+				if (regionLen == 1)
+					id = chrID
+				else
+				{
+					val pos = fields(3).toInt
+					val region = pos / regionLen
+					id = chrID + '-' + region
+				}
+			}
+		}
+		
+		if (!pwMap.contains(id))
+			pwMap.put(id, hdfsManager.open(config.getOutputFolder + "sam/" + chunkNum + "/" + id + ".sam"))
+		pwMap(id).write(line)
+	}
 }
-*/
 
 def combineChunks(config: Configuration)
 {
 	var chunkNum = 0
 	var done = false 
 	val hdfsManager = new HDFSManager
-	val os: OutputStream = {
-		if (config.getCombinedFileIsLocal) 
-			new FileOutputStream(new File(config.getCombinedFilePath))
-		else 
-			hdfsManager.openStream(config.getCombinedFilePath)
-	}
+	val osMap = new scala.collection.mutable.HashMap[String, OutputStream]
+
+	if (config.getCombinedFileIsLocal) 
+	{
+		new File(config.getCombinedFilesFolder).mkdirs
+		new File(config.getCombinedFilesFolder + "status").mkdirs
+	}				
 	
+	val readTimer = new SWTimer
+	val writeTimer = new SWTimer
 	while(!done)
 	{
 		while(!done && !hdfsManager.exists(config.getOutputFolder + "ulStatus/" + chunkNum))
@@ -226,13 +235,35 @@ def combineChunks(config: Configuration)
 		}
 		if (!done)
 		{
-			os.write(hdfsManager.readBytes(config.getOutputFolder + chunkNum + ".sam"))
-			hdfsManager.writeWholeFile(config.getOutputFolder + "combined/" + chunkNum, "")
+			val fileNames = FilesManager.getInputFileNames(config.getOutputFolder + "sam/" + chunkNum, config).filter(x => x.contains(".sam"))
+			for (f <- fileNames)
+			{
+				if (!osMap.contains(f))
+				{
+					osMap.put(f, {
+						if (config.getCombinedFileIsLocal) 
+							new FileOutputStream(new File(config.getCombinedFilesFolder + f))
+						else 
+							hdfsManager.openStream(config.getCombinedFilesFolder + f)
+					})
+				}
+				readTimer.start
+				val readBytes = hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/" + f)
+				readTimer.stop
+				
+				writeTimer.start
+				osMap(f).write(readBytes)
+				writeTimer.stop
+			}	
+			
+			hdfsManager.writeWholeFile(config.getCombinedFilesFolder + "status/" + chunkNum, "")
 			chunkNum += 1
+			println(s">> Read time = ${readTimer.getSecsF}, Write time = ${writeTimer.getSecsF}")
 		}
 	}
 	
-	os.close
+	for ((k,v) <- osMap)
+		v.close
 }
 
 def main(args: Array[String]) 

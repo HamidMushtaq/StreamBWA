@@ -44,10 +44,11 @@ public class Configuration implements Serializable
 	private String driverMemGB;
 	private String streaming;
 	private String downloadRef;
-	private String combinedFilePath;
-	private boolean makeCombinedFile;
+	private String combinedFilesFolder;
 	private boolean combinedFileIsLocal;
+	private boolean makeCombinedFile;
 	private String writeHeaderSep;
+	private String chrRegionLength;
 	
 	public void initialize(String configFile)
 	{	
@@ -74,12 +75,13 @@ public class Configuration implements Serializable
 			driverMemGB = document.getElementsByTagName("driverMemGB").item(0).getTextContent();
 			streaming = document.getElementsByTagName("streaming").item(0).getTextContent();
 			downloadRef = document.getElementsByTagName("downloadRef").item(0).getTextContent();
-			combinedFilePath = document.getElementsByTagName("combinedFilePath").item(0).getTextContent();
-			combinedFileIsLocal = combinedFilePath.startsWith("local:");
+			combinedFilesFolder = correctFolderName(document.getElementsByTagName("combinedFilesFolder").item(0).getTextContent());
+			combinedFileIsLocal = combinedFilesFolder.startsWith("local:");
 			if (combinedFileIsLocal)
-				combinedFilePath = combinedFilePath.substring(6);
+				combinedFilesFolder = combinedFilesFolder.substring(6);
 			writeHeaderSep = document.getElementsByTagName("writeHeaderSeparately").item(0).getTextContent();	
-			makeCombinedFile = !combinedFilePath.trim().equals("");
+			makeCombinedFile = !combinedFilesFolder.trim().equals("");
+			chrRegionLength = document.getElementsByTagName("chrRegionLength").item(0).getTextContent();
 		
 			startTime = System.currentTimeMillis();
 		}
@@ -198,9 +200,9 @@ public class Configuration implements Serializable
 		return downloadRef;
 	}
 	
-	public String getCombinedFilePath()
+	public String getCombinedFilesFolder()
 	{
-		return combinedFilePath;
+		return combinedFilesFolder;
 	}
 	
 	public boolean getMakeCombinedFile()
@@ -216,6 +218,11 @@ public class Configuration implements Serializable
 	public String getWriteHeaderSep()
 	{
 		return writeHeaderSep;
+	}
+	
+	public String getChrRegionLength()
+	{
+		return chrRegionLength;
 	}
 	
 	public void print()
