@@ -216,7 +216,7 @@ def appendSAM(line: String, chunkNum: Int, config: Configuration, hdfsManager: H
 	regMap(id).append(line)
 }
 
-def combineChunks(config: Configuration)
+def combineChunks0(config: Configuration)
 {
 	var chunkNum = 0
 	var done = false 
@@ -273,6 +273,86 @@ def combineChunks(config: Configuration)
 			writeTimer.stop
 			chunkNum += 1
 			println(s">> Read time = ${readTimer.getSecsF}, Write time = ${writeTimer.getSecsF}")
+		}
+	}
+	
+	for ((k,v) <- osMap)
+		v.close
+}
+
+def getTimeStamp() : String =
+{
+	return new SimpleDateFormat("HH:mm:ss").format(Calendar.getInstance().getTime())	
+}
+
+def combineChunks(config: Configuration)
+{
+	var chunkNum = 0
+	var done = false 
+	val hdfsManager = new HDFSManager
+	val osMap = new scala.collection.mutable.HashMap[String, OutputStream] 
+	var ulStatusDone = false
+	var ulChunksSet = Set[Int]()
+	var doneSet = Set[Int]()
+	var diffSet = Set[Int]()
+	
+	if (config.getCombinedFileIsLocal) 
+	{
+		new File(config.getCombinedFilesFolder).mkdirs
+		new File(config.getCombinedFilesFolder + "status").mkdirs
+	}				
+	
+	while(!(diffSet.isEmpty && ulStatusDone))
+	{
+		if (!ulStatusDone)
+		{
+			val inputFileNames = FilesManager.getInputFileNames(config.getOutputFolder + "ulStatus", config)
+			if (inputFileNames.contains("end.txt"))
+				ulStatusDone = true
+			ulChunksSet = scala.collection.mutable.Set(inputFileNames.filter(_ != "end.txt").map(_.toInt):_*)
+			println(s"[${getTimeStamp()}] ulChunksSet.size = ${ulChunksSet.size}")
+		}
+		diffSet = ulChunksSet.diff(doneSet)
+		println(s"[${getTimeStamp()}] doneSet.size = ${doneSet.size}, diffSet.size = ${diffSet.size}")
+		if (diffSet.isEmpty && !ulStatusDone)
+			Thread.sleep(500)
+		else
+		{
+			for (chunkNum <- diffSet)
+			{
+				val readTimer = new SWTimer
+				val writeTimer = new SWTimer
+				
+				readTimer.start
+				val info = hdfsManager.readWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/info").split('\n')
+				val baContent = hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.sam.gz")
+				val ba = new GzipDecompressor(baContent).decompressToBytes
+				readTimer.stop
+				writeTimer.start
+				for (i <- info)
+				{
+					val ia = i.split('\t')
+					val fid = ia(0)
+					val si = ia(1).toInt
+					val len = ia(2).toInt
+					
+					if (!osMap.contains(fid))
+					{
+						osMap.put(fid, {
+							if (config.getCombinedFileIsLocal) 
+								new FileOutputStream(new File(config.getCombinedFilesFolder + fid + ".sam"))
+							else 
+								hdfsManager.openStream(config.getCombinedFilesFolder + fid + ".sam")
+						})
+					}
+					
+					osMap(fid).write(ba, si, len)
+				}	
+				hdfsManager.writeWholeFile(config.getCombinedFilesFolder + "status/" + chunkNum, "")
+				writeTimer.stop
+				doneSet += chunkNum
+				println(s"[${getTimeStamp()}] chunkNum = ${chunkNum}, Read time = ${readTimer.getSecsF} secs, Write time = ${writeTimer.getSecsF} secs")
+			}
 		}
 	}
 	

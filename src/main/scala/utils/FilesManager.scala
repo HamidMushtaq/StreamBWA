@@ -79,6 +79,9 @@ object FilesManager
 	{
 		val hdfsManager = new HDFSManager
 		
+		if (!hdfsManager.exists(dir))
+			return new Array[String](0)
+		
 		val a: Array[String] = hdfsManager.getFileList(dir)
 
 		return a
