@@ -16,27 +16,28 @@
  */
 package utils
 
+
 import java.io.BufferedReader
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStreamReader
 import java.util.zip.GZIPInputStream
-import org.apache.commons.io.IOUtils
+import java.util.zip.GZIPOutputStream
+import tudelft.utils.GZIPOutputStream1
 
-class GzipDecompressor(compressed: Array[Byte])
+class GzipCompressor(data: String)
 {
-	def decompressToBytes() : Array[Byte] =
-	{
-		val out = new ByteArrayOutputStream()
-		IOUtils.copy(new GZIPInputStream(new ByteArrayInputStream(compressed)), out)
-		return out.toByteArray
-	}
+	private final val COMPRESSION_LEVEL = 4
 	
-	def decompress() : String = 
+	def compress() : Array[Byte] = 
 	{
-		val out = new ByteArrayOutputStream()
-		IOUtils.copy(new GZIPInputStream(new ByteArrayInputStream(compressed)), out)
-		return out.toString("UTF-8")
+		val bos = new ByteArrayOutputStream(data.length)
+		val gzip = new GZIPOutputStream1(bos, COMPRESSION_LEVEL)
+		gzip.write(data.getBytes)
+		gzip.close
+		val compressed = bos.toByteArray
+		bos.close
+		return compressed
 	}
 }

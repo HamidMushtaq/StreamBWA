@@ -167,21 +167,22 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 	if (fqFileName2 != null)
 		new File(fqFileName2).delete
 	
-	val os = hdfsManager.openStream(config.getOutputFolder + "sam/" + chunkNum + "/content.sam")
+	LogWriter.dbgLog(x, t0, "2\t" + "BWA finished. Now compressing and uploading the data", config)
 	val infoSb = new StringBuilder
+	val content = new StringBuilder(327680000)
 	var si = 0
 	for ((id,sb) <- regMap)
 	{
-		val ba = sb.toString.getBytes
-		os.write(ba)
-		infoSb.append(id + '\t' + si + '\t' + ba.size + '\n')
-		si += ba.size
+		content.append(sb)
+		infoSb.append(id + '\t' + si + '\t' + sb.size + '\n')
+		si += sb.size
 	}
-	os.close
+	val compressedContent = new GzipCompressor(content.toString).compress
+	hdfsManager.writeBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.sam.gz", compressedContent)
 	hdfsManager.writeWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/info", infoSb.toString)
 	hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/" + chunkNum.toString, "")
 	
-	LogWriter.dbgLog(x, t0, "2\t" + "Content uploaded to the HDFS, r = " + r, config)
+	LogWriter.dbgLog(x, t0, "3\t" + "Content uploaded to the HDFS, r = " + r, config)
 	return r
 }
 
@@ -245,7 +246,8 @@ def combineChunks(config: Configuration)
 		{
 			readTimer.start
 			val info = hdfsManager.readWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/info").split('\n')
-			val ba = hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.sam")
+			val baContent = hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.sam.gz")
+			val ba = new GzipDecompressor(baContent).decompressToBytes
 			readTimer.stop
 			writeTimer.start
 			for (i <- info)
