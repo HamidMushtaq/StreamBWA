@@ -34,7 +34,7 @@ public class Configuration implements Serializable
 	private String extraBWAParams;
 	private String tmpFolder;
 	private String sfFolder;
-	private String numInstances;
+	private String numExecutors;
 	private String numTasks;
 	private String groupSize;
 	private Long startTime;
@@ -45,6 +45,7 @@ public class Configuration implements Serializable
 	private String streaming;
 	private String downloadRef;
 	private String combinedFilesFolder;
+	private String combinerThreads;
 	private boolean combinedFileIsLocal;
 	private boolean makeCombinedFile;
 	private String writeHeaderSep;
@@ -66,7 +67,7 @@ public class Configuration implements Serializable
 			extraBWAParams = document.getElementsByTagName("extraBWAParams").item(0).getTextContent();
 			tmpFolder = correctFolderName(document.getElementsByTagName("tmpFolder").item(0).getTextContent());
 			sfFolder = correctFolderName(document.getElementsByTagName("sfFolder").item(0).getTextContent());
-			numInstances = document.getElementsByTagName("numInstances").item(0).getTextContent();
+			numExecutors = document.getElementsByTagName("numExecutors").item(0).getTextContent();
 			numTasks = document.getElementsByTagName("numTasks").item(0).getTextContent();
 			groupSize = document.getElementsByTagName("groupSize").item(0).getTextContent();
 			execMemGB = document.getElementsByTagName("execMemGB").item(0).getTextContent();
@@ -76,6 +77,7 @@ public class Configuration implements Serializable
 			streaming = document.getElementsByTagName("streaming").item(0).getTextContent();
 			downloadRef = document.getElementsByTagName("downloadRef").item(0).getTextContent();
 			combinedFilesFolder = correctFolderName(document.getElementsByTagName("combinedFilesFolder").item(0).getTextContent());
+			combinerThreads = document.getElementsByTagName("combinerThreads").item(0).getTextContent();
 			combinedFileIsLocal = combinedFilesFolder.startsWith("local:");
 			if (combinedFileIsLocal)
 				combinedFilesFolder = combinedFilesFolder.substring(6);
@@ -147,9 +149,9 @@ public class Configuration implements Serializable
 		return sfFolder;
 	}
 	
-	public String getNumInstances()
+	public String getNumExecutors()
 	{
-		return numInstances;
+		return numExecutors;
 	}
 	
 	public String getNumTasks()
@@ -162,9 +164,9 @@ public class Configuration implements Serializable
 		return groupSize;
 	}
 	
-	public void setNumInstances(String numInstances)
+	public void setNumExecutors(String numExecutors)
 	{
-		this.numInstances = numInstances;
+		this.numExecutors = numExecutors;
 	}
 	
 	public Long getStartTime()
@@ -207,6 +209,11 @@ public class Configuration implements Serializable
 		return combinedFilesFolder;
 	}
 	
+	public String getCombinerThreads()
+	{
+		return combinerThreads;
+	}
+	
 	public boolean getMakeCombinedFile()
 	{
 		return makeCombinedFile;
@@ -234,7 +241,7 @@ public class Configuration implements Serializable
 		System.out.println("inputFolder:\t" + inputFolder);
 		System.out.println("outputFolder:\t" + outputFolder);
 		System.out.println("tmpFolder:\t" + tmpFolder);
-		System.out.println("numInstances:\t" + numInstances);
+		System.out.println("numExecutors:\t" + numExecutors);
 		System.out.println("numTasks:\t" + numTasks);
 		System.out.println("groupSize:\t" + groupSize);
 		System.out.println("execMemGB:\t" + execMemGB);

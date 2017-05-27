@@ -38,7 +38,7 @@ inputFolder = doc.getElementsByTagName("inputFolder")[0].firstChild.data
 outputFolder = doc.getElementsByTagName("outputFolder")[0].firstChild.data
 tmpFolder = doc.getElementsByTagName("tmpFolder")[0].firstChild.data
 toolsFolder = doc.getElementsByTagName("toolsFolder")[0].firstChild.data
-numInstances = doc.getElementsByTagName("numInstances")[0].firstChild.data
+numExecutors = doc.getElementsByTagName("numExecutors")[0].firstChild.data
 numTasks = doc.getElementsByTagName("numTasks")[0].firstChild.data
 exe_mem = doc.getElementsByTagName("execMemGB")[0].firstChild.data + "g"
 driver_mem = doc.getElementsByTagName("driverMemGB")[0].firstChild.data + "g"
@@ -76,7 +76,7 @@ def executeStreamBWA():
 	cmdStr = "$SPARK_HOME/bin/spark-submit " + \
 	"--class \"StreamBWA\" --master " + diff_str + " " + \
 	"--driver-memory " + driver_mem + " --executor-memory " + exe_mem + " " + \
-	"--num-executors " + numInstances + " --executor-cores " + numTasks + " " + \
+	"--num-executors " + numExecutors + " --executor-cores " + numTasks + " " + \
 	exeName + " " + os.path.basename(configFilePath)
 	
 	print cmdStr

@@ -227,6 +227,7 @@ def combineChunks(config: Configuration)
 	var done = false 
 	val hdfsManager = new HDFSManager
 	val osMap = new scala.collection.mutable.HashMap[String, OutputStream] 
+	val numThreads = config.getCombinerThreads.toInt
 	var ulStatusDone = false
 	var ulChunksSet = Set[Int]()
 	var doneSet = Set[Int]()
@@ -254,51 +255,57 @@ def combineChunks(config: Configuration)
 			Thread.sleep(500)
 		else
 		{
-			val futures = new Array[Future[Unit]](diffSet.size)
+			val diffSetArray = diffSet.toArray
 			val timer = new SWTimer
-			var index = 0
 			timer.start
-			for (chunkNum <- diffSet)
+			for (di <- 0 until diffSetArray.size by numThreads)
 			{
-				futures(index) = Future
+				val futures = new Array[Future[Unit]](numThreads)
+				var nFutures = 0
+				for (fi <- 0 until numThreads
+					if ((di + fi) < diffSetArray.size))
 				{
-					val info = hdfsManager.readWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/info").split('\n')
-					val baContent = hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.sam.gz")
-					val ba = new GzipDecompressor(baContent).decompressToBytes
-					
-					doneSet.synchronized
+					val chunkNum = diffSetArray(di + fi)
+					futures(fi) = Future
 					{
-						for (i <- info)
+						val info = hdfsManager.readWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/info").split('\n')
+						val baContent = hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.sam.gz")
+						val ba = new GzipDecompressor(baContent).decompressToBytes
+						
+						doneSet.synchronized
 						{
-							val ia = i.split('\t')
-							val fid = ia(0)
-							val si = ia(1).toInt
-							val len = ia(2).toInt
-							
-							if (!osMap.contains(fid))
+							for (i <- info)
 							{
-								osMap.put(fid, {
-									if (config.getCombinedFileIsLocal) 
-										new FileOutputStream(new File(config.getCombinedFilesFolder + fid + ".sam"))
-									else 
-										hdfsManager.openStream(config.getCombinedFilesFolder + fid + ".sam")
-								})
-							}
-							
-							osMap(fid).write(ba, si, len)
-						}	
-						hdfsManager.writeWholeFile(config.getCombinedFilesFolder + "status/" + chunkNum, "")
-						doneSet += chunkNum
+								val ia = i.split('\t')
+								val fid = ia(0)
+								val si = ia(1).toInt
+								val len = ia(2).toInt
+								
+								if (!osMap.contains(fid))
+								{
+									osMap.put(fid, {
+										if (config.getCombinedFileIsLocal) 
+											new FileOutputStream(new File(config.getCombinedFilesFolder + fid + ".sam"))
+										else 
+											hdfsManager.openStream(config.getCombinedFilesFolder + fid + ".sam")
+									})
+								}
+								
+								osMap(fid).write(ba, si, len)
+							}	
+							hdfsManager.writeWholeFile(config.getCombinedFilesFolder + "status/" + chunkNum, "")
+							doneSet += chunkNum
+						}
 					}
-				}
-				index += 1
-			}
-			for(f <- futures)
-				Await.result(f, Duration.Inf)
+					nFutures += 1
+				} // End of for loop with numThreads number of iterations
+				for(i <- 0 until nFutures)
+					Await.result(futures(i), Duration.Inf)
+			} // End of outer for loop
 			timer.stop
-			println(s"--> [${getTimeStamp()}] diffSet.size = ${diffSet.size}, time = ${timer.getSecsF} secs")
-		}
-	}
+			println(s"--> [${getTimeStamp()}] diffSetArray.size = ${diffSetArray.size}, time = ${timer.getSecsF} secs")
+		} // End of the else that processes chunks using futures.
+	} // End of outer while loop
 	
 	for ((k,v) <- osMap)
 		v.close

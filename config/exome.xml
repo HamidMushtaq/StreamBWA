@@ -12,13 +12,14 @@
 	<interleaved>false</interleaved> 
 	<execMemGB>112</execMemGB> 						
 	<driverMemGB>4</driverMemGB> 					
-	<numInstances>4</numInstances> 	
+	<numExecutors>4</numExecutors> 	
 	<numTasks>8</numTasks>
-	<groupSize>1792</groupSize>
+	<groupSize>256</groupSize>
 	<streaming>true</streaming>
 	<downloadRef>false</downloadRef>
 	<!-- leave this field empty if you do not want a combined SAM file -->
 	<combinedFilesFolder>bwaOut/combined</combinedFilesFolder>
+	<combinerThreads>2</combinerThreads>
 	<!-- <combinedFilesFolder></combinedFilesFolder> -->
 	<!-- This field is only used in the case of a combined SAM file -->
 	<writeHeaderSeparately>true</writeHeaderSeparately>

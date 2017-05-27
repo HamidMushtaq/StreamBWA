@@ -11,16 +11,18 @@
 	<!-- The program will insert the -p flag itself if interleaved is set to true and singleEnded is set to false -->
 	<interleaved>false</interleaved> 
 	<execMemGB>112</execMemGB> 						
-	<driverMemGB>4</driverMemGB> 					
-	<numInstances>4</numInstances> 	
+	<driverMemGB>6</driverMemGB> 					
+	<numExecutors>4</numExecutors> 	
 	<numTasks>8</numTasks>
 	<groupSize>1792</groupSize>
 	<streaming>true</streaming>
 	<downloadRef>false</downloadRef>
 	<!-- leave this field empty if you do not want a combined SAM file -->
 	<combinedFilesFolder>bwaOut/combined</combinedFilesFolder>
+	<combinerThreads>2</combinerThreads>
+	<!-- <combinedFilesFolder></combinedFilesFolder> -->
 	<!-- This field is only used in the case of a combined SAM file -->
 	<writeHeaderSeparately>true</writeHeaderSeparately>
 	<!-- 0 if combining to one file. 1 if you want a separate file for each chromosome. Otherwise define the length of regions -->
-	<chrRegionLength>1</chrRegionLength>
+	<chrRegionLength>4e6</chrRegionLength>
 </configuration>
