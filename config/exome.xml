@@ -1,9 +1,11 @@
 <configuration>
+	<!-- options for mode: yarn-client or yarn-cluster -->
+	<mode>yarn-client</mode>
 	<refPath>filesB37/human_g1k_v37_decoy.fasta</refPath>
 	<inputFolder>wg_chunks</inputFolder>
 	<outputFolder>bwaOut</outputFolder> 
 	<tmpFolder>/tmp/spark</tmpFolder>
-  	<sfFolder>/tmp/spark</sfFolder>
+	<sfFolder>/tmp/spark</sfFolder>
 	<toolsFolder>tools</toolsFolder>
 	<!--<extraBWAParams>-t 4 -R @RG\tID:sample_lane\tSM:sample\tPL:illumina\tLB:sample\tPU:lane</extraBWAParams> -->
 	<extraBWAParams>-M -t 4</extraBWAParams>
@@ -11,16 +13,17 @@
 	<!-- The program will insert the -p flag itself if interleaved is set to true and singleEnded is set to false -->
 	<interleaved>false</interleaved> 
 	<execMemGB>112</execMemGB> 						
-	<driverMemGB>4</driverMemGB> 					
+	<driverMemGB>5</driverMemGB> 					
 	<numExecutors>4</numExecutors> 	
 	<numTasks>8</numTasks>
 	<groupSize>256</groupSize>
 	<streaming>true</streaming>
 	<downloadRef>false</downloadRef>
+	<!-- leave this field empty if nothing has to be ignored -->
+	<ignoreList></ignoreList>
 	<!-- leave this field empty if you do not want a combined SAM file -->
 	<combinedFilesFolder>bwaOut/combined</combinedFilesFolder>
 	<combinerThreads>2</combinerThreads>
-	<!-- <combinedFilesFolder></combinedFilesFolder> -->
 	<!-- This field is only used in the case of a combined SAM file -->
 	<writeHeaderSeparately>true</writeHeaderSeparately>
 	<!-- 0 if combining to one file. 1 if you want a separate file for each chromosome. Otherwise define the length of regions -->

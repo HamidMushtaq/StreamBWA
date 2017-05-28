@@ -1,4 +1,6 @@
 <configuration>
+	<!-- options for mode: yarn-client or yarn-cluster -->
+	<mode>yarn-client</mode>
 	<refPath>filesB37/human_g1k_v37_decoy.fasta</refPath>
 	<inputFolder>wg_chunks</inputFolder>
 	<outputFolder>bwaOut</outputFolder> 
@@ -17,6 +19,7 @@
 	<groupSize>1792</groupSize>
 	<streaming>true</streaming>
 	<downloadRef>false</downloadRef>
+	<ignoreList></ignoreList>
 	<!-- leave this field empty if you do not want a combined SAM file -->
 	<combinedFilesFolder>bwaOut/combined</combinedFilesFolder>
 	<combinerThreads>2</combinerThreads>

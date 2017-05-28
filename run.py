@@ -11,15 +11,13 @@ import subprocess
 import math
 import glob
 
-USE_YARN_CLIENT_FOR_HADOOP = True
-
 if len(sys.argv) < 3:
 	print("Not enough arguments!")
 	print("Example of usage: ./runPart.py streambwa_2.11-1.0.jar config.xml")
 	sys.exit(1)
 
 exeName = sys.argv[1]
-logFile = "time.txt"
+logFile = "timings.txt"
 configFilePath = sys.argv[2]
 
 if not os.path.isfile(configFilePath):
@@ -27,17 +25,20 @@ if not os.path.isfile(configFilePath):
 	sys.exit(1)
 
 doc = minidom.parse(configFilePath)
+mode = doc.getElementsByTagName("mode")[0].firstChild.data
 refPath = doc.getElementsByTagName("refPath")[0].firstChild.data
 inputFolder = doc.getElementsByTagName("inputFolder")[0].firstChild.data
 outputFolder = doc.getElementsByTagName("outputFolder")[0].firstChild.data
 tmpFolder = doc.getElementsByTagName("tmpFolder")[0].firstChild.data
 toolsFolder = doc.getElementsByTagName("toolsFolder")[0].firstChild.data
 numExecutors = doc.getElementsByTagName("numExecutors")[0].firstChild.data
+ignoreList = doc.getElementsByTagName("ignoreList")[0].firstChild
+ignoreListPath = "" if (ignoreList == None) else ignoreList.strip()
 numTasks = doc.getElementsByTagName("numTasks")[0].firstChild.data
 exe_mem = doc.getElementsByTagName("execMemGB")[0].firstChild.data + "g"
 driver_mem = doc.getElementsByTagName("driverMemGB")[0].firstChild.data + "g"
 
-def executeHadoop():	
+def executeStreamBWA():	
 	if not (os.path.exists(toolsFolder) and os.path.isdir(toolsFolder)):
 		print "The specified tools folder (" + toolsFolder + ") doesn't exist!"
 		sys.exit(1)
@@ -46,11 +47,6 @@ def executeHadoop():
 		if not os.path.exists(bwaPath):
 			print "The bwa executable (" + bwaPath + ") is not found!"
 			sys.exit(1)
-		
-	if USE_YARN_CLIENT_FOR_HADOOP:
-		os.system('cp ' + configFilePath + ' ./')
-		if not os.path.exists(tmpFolder):
-			os.makedirs(tmpFolder)
 			
 	tools = glob.glob(toolsFolder + '/*')
 	toolsStr = ''
@@ -58,20 +54,17 @@ def executeHadoop():
 		toolsStr = toolsStr + t + ','
 	toolsStr = toolsStr[0:-1]
 	
-	diff_str = ("yarn-client --files " + toolsStr) if USE_YARN_CLIENT_FOR_HADOOP else ("yarn-cluster --files " + configFilePath + "," + toolsStr)
+	ignoreListStr = "" if (len(ignoreListPath) == 0) else ("," + ignoreListPath)
 	
 	cmdStr = "$SPARK_HOME/bin/spark-submit " + \
-	"--class \"StreamBWA\" --master " + diff_str + " " + \
+	"--class \"StreamBWA\" --master " + mode + " --files " + configFilePath + "," + toolsStr + ignoreListStr + " " + \
 	"--driver-memory " + driver_mem + " --executor-memory " + exe_mem + " " + \
 	"--num-executors " + numExecutors + " --executor-cores " + numTasks + " " + \
-	exeName + " " + os.path.basename(configFilePath)
+	exeName + " " + configFilePath
 	
 	print cmdStr
 	addToLog("[" + time.ctime() + "] " + cmdStr)
 	os.system(cmdStr)
-	
-	if USE_YARN_CLIENT_FOR_HADOOP:
-		os.remove('./' + configFilePath[configFilePath.rfind('/') + 1:])
 	
 def addToLog(s):
 	f = open(logFile,'a+')
@@ -80,9 +73,8 @@ def addToLog(s):
 
 start_time = time.time()
 
-addToLog("########################################\n[" + time.ctime() + "] Part1 started.")
 os.system("hadoop fs -rm -r -f -skipTrash " + outputFolder)
-executeHadoop()
+executeStreamBWA()
 addToLog("[" + time.ctime() + "]")
 	
 time_in_secs = int(time.time() - start_time)

@@ -18,6 +18,7 @@ package tudelft.utils;
 
 import htsjdk.samtools.*;
 import java.io.File;
+import java.nio.file.*;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.DocumentBuilder;
 import org.w3c.dom.Document;
@@ -46,44 +47,65 @@ public class Configuration implements Serializable
 	private String downloadRef;
 	private String combinedFilesFolder;
 	private String combinerThreads;
+	private HashSet<String> ignoreListSet;
 	private boolean combinedFileIsLocal;
 	private boolean makeCombinedFile;
+	private boolean inClientMode;
 	private String writeHeaderSep;
 	private Long chrRegionLength;
 	
-	public void initialize(String configFile)
+	public void initialize(String configFilePath, String deployMode)
 	{	
 		try
 		{
+			inClientMode = deployMode.equals("client");
+			String configFile = configFilePath;
+			if (!inClientMode)
+				configFile = getFileNameFromPath(configFile);
+			
 			File file = new File(configFile);
 			DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
 			DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
 			Document document = documentBuilder.parse(file);
 			
-			refPath = document.getElementsByTagName("refPath").item(0).getTextContent();
-			inputFolder = correctFolderName(document.getElementsByTagName("inputFolder").item(0).getTextContent());
-			outputFolder = correctFolderName(document.getElementsByTagName("outputFolder").item(0).getTextContent());
-			toolsFolder = correctFolderName(document.getElementsByTagName("toolsFolder").item(0).getTextContent());
-			extraBWAParams = document.getElementsByTagName("extraBWAParams").item(0).getTextContent();
-			tmpFolder = correctFolderName(document.getElementsByTagName("tmpFolder").item(0).getTextContent());
-			sfFolder = correctFolderName(document.getElementsByTagName("sfFolder").item(0).getTextContent());
-			numExecutors = document.getElementsByTagName("numExecutors").item(0).getTextContent();
-			numTasks = document.getElementsByTagName("numTasks").item(0).getTextContent();
-			groupSize = document.getElementsByTagName("groupSize").item(0).getTextContent();
-			execMemGB = document.getElementsByTagName("execMemGB").item(0).getTextContent();
-			singleEnded = document.getElementsByTagName("singleEnded").item(0).getTextContent();
-			interleaved = document.getElementsByTagName("interleaved").item(0).getTextContent();
-			driverMemGB = document.getElementsByTagName("driverMemGB").item(0).getTextContent();
-			streaming = document.getElementsByTagName("streaming").item(0).getTextContent();
-			downloadRef = document.getElementsByTagName("downloadRef").item(0).getTextContent();
-			combinedFilesFolder = correctFolderName(document.getElementsByTagName("combinedFilesFolder").item(0).getTextContent());
-			combinerThreads = document.getElementsByTagName("combinerThreads").item(0).getTextContent();
+			refPath = document.getElementsByTagName("refPath").item(0).getTextContent().trim();
+			inputFolder = correctFolderName(document.getElementsByTagName("inputFolder").item(0).getTextContent().trim());
+			outputFolder = correctFolderName(document.getElementsByTagName("outputFolder").item(0).getTextContent().trim());
+			toolsFolder = correctFolderName(document.getElementsByTagName("toolsFolder").item(0).getTextContent().trim());
+			extraBWAParams = document.getElementsByTagName("extraBWAParams").item(0).getTextContent().trim();
+			tmpFolder = correctFolderName(document.getElementsByTagName("tmpFolder").item(0).getTextContent().trim());
+			sfFolder = correctFolderName(document.getElementsByTagName("sfFolder").item(0).getTextContent().trim());
+			numExecutors = document.getElementsByTagName("numExecutors").item(0).getTextContent().trim();
+			numTasks = document.getElementsByTagName("numTasks").item(0).getTextContent().trim();
+			groupSize = document.getElementsByTagName("groupSize").item(0).getTextContent().trim();
+			execMemGB = document.getElementsByTagName("execMemGB").item(0).getTextContent().trim();
+			singleEnded = document.getElementsByTagName("singleEnded").item(0).getTextContent().trim();
+			interleaved = document.getElementsByTagName("interleaved").item(0).getTextContent().trim();
+			driverMemGB = document.getElementsByTagName("driverMemGB").item(0).getTextContent().trim();
+			streaming = document.getElementsByTagName("streaming").item(0).getTextContent().trim();
+			downloadRef = document.getElementsByTagName("downloadRef").item(0).getTextContent().trim();
+			combinedFilesFolder = correctFolderName(document.getElementsByTagName("combinedFilesFolder").item(0).getTextContent().trim());
+			combinerThreads = document.getElementsByTagName("combinerThreads").item(0).getTextContent().trim();
+			String ignoreList = document.getElementsByTagName("ignoreList").item(0).getTextContent().trim();
+			if (!inClientMode)
+				ignoreList = getFileNameFromPath(ignoreList);
+			ignoreListSet = new HashSet<String>();
+			if (!ignoreList.equals(""))
+			{
+				List<String> lines = Files.readAllLines(Paths.get(ignoreList), java.nio.charset.StandardCharsets.UTF_8);
+				for (String s: lines)
+				{
+					String x = s.trim();
+					if (!x.equals(""))
+						ignoreListSet.add(x);
+				}
+			}
 			combinedFileIsLocal = combinedFilesFolder.startsWith("local:");
 			if (combinedFileIsLocal)
 				combinedFilesFolder = combinedFilesFolder.substring(6);
-			writeHeaderSep = document.getElementsByTagName("writeHeaderSeparately").item(0).getTextContent();	
-			makeCombinedFile = !combinedFilesFolder.trim().equals("");
-			String chrRegionLengthStr = document.getElementsByTagName("chrRegionLength").item(0).getTextContent();
+			writeHeaderSep = document.getElementsByTagName("writeHeaderSeparately").item(0).getTextContent().trim();	
+			makeCombinedFile = !combinedFilesFolder.equals("");
+			String chrRegionLengthStr = document.getElementsByTagName("chrRegionLength").item(0).getTextContent().trim();
 			float chrRegionLengthF = Float.valueOf(chrRegionLengthStr);
 			chrRegionLength = (long)chrRegionLengthF;
 		
@@ -111,7 +133,10 @@ public class Configuration implements Serializable
 	
 	private String getFileNameFromPath(String path)
 	{
-		return path.substring(path.lastIndexOf('/') + 1);
+		if (path.contains("/"))
+			return path.substring(path.lastIndexOf('/') + 1);
+		else
+			return path;
 	}
 	
 	public String getRefPath()
@@ -234,20 +259,38 @@ public class Configuration implements Serializable
 		return chrRegionLength;
 	}
 	
+	public boolean isInIgnoreList(String s)
+	{
+		return ignoreListSet.contains(s);
+	}
+		
 	public void print()
 	{
 		System.out.println("***** Configuration *****");
-		System.out.println("refPath:\t" + refPath);
-		System.out.println("inputFolder:\t" + inputFolder);
-		System.out.println("outputFolder:\t" + outputFolder);
-		System.out.println("tmpFolder:\t" + tmpFolder);
-		System.out.println("numExecutors:\t" + numExecutors);
-		System.out.println("numTasks:\t" + numTasks);
-		System.out.println("groupSize:\t" + groupSize);
-		System.out.println("execMemGB:\t" + execMemGB);
-		System.out.println("driverMemGB:\t" + driverMemGB);
-		System.out.println("streaming:\t" + streaming);
-		System.out.println("downloadRef:\t" + downloadRef);
+		System.out.println("inClientMode:\t|" + inClientMode + "|");
+		System.out.println("refPath:\t|" + refPath  + "|");
+		System.out.println("inputFolder:\t|" + inputFolder + "|");
+		System.out.println("outputFolder:\t|" + outputFolder + "|");
+		System.out.println("tmpFolder:\t|" + tmpFolder + "|");
+		System.out.println("sfFolder:\t|" + sfFolder + "|");
+		System.out.println("numExecutors:\t|" + numExecutors + "|");
+		System.out.println("numTasks:\t|" + numTasks + "|");
+		System.out.println("groupSize:\t|" + groupSize + "|");
+		System.out.println("execMemGB:\t|" + execMemGB + "|");
+		System.out.println("driverMemGB:\t|" + driverMemGB + "|");
+		System.out.println("singleEnded:\t|" + singleEnded + "|");
+		System.out.println("interleaved:\t|" + interleaved + "|");
+		System.out.println("streaming:\t|" + streaming + "|");
+		System.out.println("downloadRef:\t|" + downloadRef + "|");
+		System.out.println("combinedFilesFolder:\t|" + combinedFilesFolder + "|");
+		System.out.println("combinerThreads:\t|" + combinerThreads + "|");
+		System.out.println("combinedFileIsLocal:\t|" + combinedFileIsLocal + "|");
+		System.out.println("writeHeaderSep:\t|" + writeHeaderSep + "|");
+		System.out.println("makeCombinedFile:\t|" + makeCombinedFile + "|");
+		System.out.println("chrRegionLength:\t|" + chrRegionLength + "|");
+		System.out.println("ignoreList:");
+		for (String s: ignoreListSet)
+			System.out.println("<" + s + ">");
 		System.out.println("*************************");
 	}
 }

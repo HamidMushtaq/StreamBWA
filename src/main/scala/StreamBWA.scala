@@ -193,27 +193,30 @@ def appendSAM(line: String, chunkNum: Int, config: Configuration, hdfsManager: H
 	var id: String = "0"
 	val regionLen = config.getChrRegionLength
 	val chrID = fields(2)
-		
-	if (regionLen != 0)
+	
+	if (!config.isInIgnoreList(chrID))
 	{
-		if (chrID == "*")
-			id = "unmapped"
-		else
+		if (regionLen != 0)
 		{
-			if (regionLen == 1)
-				id = chrID
+			if (chrID == "*")
+				id = "unmapped"
 			else
 			{
-				val pos = fields(3).toLong
-				val region = pos / regionLen
-				id = chrID + '-' + region
+				if (regionLen == 1)
+					id = chrID
+				else
+				{
+					val pos = fields(3).toLong
+					val region = pos / regionLen
+					id = chrID + '-' + region
+				}
 			}
 		}
+		
+		if (!regMap.contains(id))
+			regMap.put(id, new StringBuilder)
+		regMap(id).append(line)
 	}
-	
-	if (!regMap.contains(id))
-		regMap.put(id, new StringBuilder)
-	regMap(id).append(line)
 }
 
 def getTimeStamp() : String =
@@ -313,22 +316,21 @@ def combineChunks(config: Configuration)
 
 def main(args: Array[String]) 
 {
-	val config = new Configuration()
-	config.initialize(args(0))
 	val conf = new SparkConf().setAppName("StreamBWA")
+	val sc = new SparkContext(conf)
 	
 	if (compressRDDs)
 		conf.set("spark.rdd.compress","true")
-	
-	val sc = new SparkContext(conf)
-	val bcConfig = sc.broadcast(config)
-	val hdfsManager = new HDFSManager
 	
 	// Comment these two lines if you want to see more verbose messages from Spark
 	//Logger.getLogger("org").setLevel(Level.OFF);
 	//Logger.getLogger("akka").setLevel(Level.OFF);
 	
+	val config = new Configuration()
+	config.initialize(args(0), sc.deployMode)
 	config.print() 
+	val bcConfig = sc.broadcast(config)
+	val hdfsManager = new HDFSManager
 	val makeCombinedFile = config.getMakeCombinedFile
 	var f: Future[Unit] = null
 	
