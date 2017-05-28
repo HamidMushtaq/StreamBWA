@@ -145,7 +145,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 	
 	LogWriter.dbgLog(x, t0, "1\tbwa mem started: " + command_str + ". Input file size = " + (inputSize/(1024*1024)) + " MB", config)
 	//////////////////////////////////////////////////////////////////////////
-	val regMap = new scala.collection.mutable.HashMap[String, StringBuilder]
+	val regMap = new scala.collection.mutable.HashMap[String, (StringBuilder, StringBuilder)]
 	val pwHeader = hdfsManager.open(config.getOutputFolder + "sam/" + chunkNum + "/header")
 	val logger = ProcessLogger(
 		//(o: String) => {bwaOutStr.append(o + '\n')}
@@ -170,15 +170,20 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 	LogWriter.dbgLog(x, t0, "2\t" + "BWA finished. Now compressing and uploading the data", config)
 	val infoSb = new StringBuilder
 	val content = new StringBuilder(327680000)
+	val posContent = new StringBuilder(4096000)
 	var si = 0
+	var psi = 0
 	for ((id,sb) <- regMap)
 	{
-		content.append(sb)
-		infoSb.append(id + '\t' + si + '\t' + sb.size + '\n')
-		si += sb.size
+		content.append(sb._1)
+		posContent.append(sb._2)
+		infoSb.append(id + '\t' + si + '\t' + sb._1.size + '\t' + psi + '\t' + sb._2.size + '\n')
+		si += sb._1.size
+		psi += sb._2.size
 	}
 	val compressedContent = new GzipCompressor(content.toString).compress
 	hdfsManager.writeBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.sam.gz", compressedContent)
+	hdfsManager.writeWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/content.pos", posContent.toString)
 	hdfsManager.writeWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/info", infoSb.toString)
 	hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/" + chunkNum.toString, "")
 	
@@ -187,7 +192,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 }
 
 def appendSAM(line: String, chunkNum: Int, config: Configuration, hdfsManager: HDFSManager, 
-	regMap: scala.collection.mutable.HashMap[String, StringBuilder]) 
+	regMap: scala.collection.mutable.HashMap[String, (StringBuilder, StringBuilder)]) 
 {
 	val fields = line.split('\t')
 	var id: String = "0"
@@ -214,8 +219,16 @@ def appendSAM(line: String, chunkNum: Int, config: Configuration, hdfsManager: H
 		}
 		
 		if (!regMap.contains(id))
-			regMap.put(id, new StringBuilder)
-		regMap(id).append(line)
+		{
+			regMap.put(id, (new StringBuilder, new StringBuilder))
+		}
+		
+		val pos = fields(3)
+		regMap(id)._1.append(line)
+		if (regionLen != 0)
+			regMap(id)._2.append(pos + '\n')
+		else
+			regMap(id)._2.append(chrID + '\t' + pos + '\n')
 	}
 }
 
@@ -229,7 +242,8 @@ def combineChunks(config: Configuration)
 	var chunkNum = 0
 	var done = false 
 	val hdfsManager = new HDFSManager
-	val osMap = new scala.collection.mutable.HashMap[String, OutputStream] 
+	val osMap = new scala.collection.mutable.HashMap[String, OutputStream]
+	val posOsMap = new scala.collection.mutable.HashMap[String, OutputStream]
 	val numThreads = config.getCombinerThreads.toInt
 	val writeHeaderSep = config.getWriteHeaderSep.toBoolean
 	var ulStatusDone = false
@@ -275,6 +289,7 @@ def combineChunks(config: Configuration)
 						val info = hdfsManager.readWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/info").split('\n')
 						val baContent = hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.sam.gz")
 						val ba = new GzipDecompressor(baContent).decompressToBytes
+						val pba = hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.pos")
 						
 						doneSet.synchronized
 						{
@@ -286,9 +301,14 @@ def combineChunks(config: Configuration)
 							for (i <- info)
 							{
 								val ia = i.split('\t')
+								// File ID
 								val fid = ia(0)
+								// Starting index and size for sam content
 								val si = ia(1).toInt
 								val len = ia(2).toInt
+								// Starting index and size for positions
+								val psi = ia(3).toInt
+								val plen = ia(4).toInt
 								
 								if (!osMap.contains(fid))
 								{
@@ -303,9 +323,17 @@ def combineChunks(config: Configuration)
 											os.write(hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/header"))
 										os
 									})
+									
+									posOsMap.put(fid, {
+										if (config.getCombinedFileIsLocal)
+											new FileOutputStream(new File(config.getCombinedFilesFolder + fid + ".pos"))
+										else
+											hdfsManager.openStream(config.getCombinedFilesFolder + fid + ".pos")
+									})
 								}
 								
 								osMap(fid).write(ba, si, len)
+								posOsMap(fid).write(pba, psi, plen)
 							}	
 							hdfsManager.writeWholeFile(config.getCombinedFilesFolder + "status/" + chunkNum, "")
 							doneSet += chunkNum
@@ -322,6 +350,8 @@ def combineChunks(config: Configuration)
 	} // End of outer while loop
 	
 	for ((k,v) <- osMap)
+		v.close
+	for ((k,v) <- posOsMap)
 		v.close
 }
 
