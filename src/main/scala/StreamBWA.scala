@@ -231,6 +231,7 @@ def combineChunks(config: Configuration)
 	val hdfsManager = new HDFSManager
 	val osMap = new scala.collection.mutable.HashMap[String, OutputStream] 
 	val numThreads = config.getCombinerThreads.toInt
+	val writeHeaderSep = config.getWriteHeaderSep.toBoolean
 	var ulStatusDone = false
 	var ulChunksSet = Set[Int]()
 	var doneSet = Set[Int]()
@@ -277,6 +278,11 @@ def combineChunks(config: Configuration)
 						
 						doneSet.synchronized
 						{
+							if (doneSet.isEmpty && writeHeaderSep && !hdfsManager.exists(config.getCombinedFilesFolder + "header"))
+							{
+								val header = hdfsManager.readWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/header")
+								hdfsManager.writeWholeFile(config.getCombinedFilesFolder + "header", header)
+							}
 							for (i <- info)
 							{
 								val ia = i.split('\t')
@@ -287,10 +293,15 @@ def combineChunks(config: Configuration)
 								if (!osMap.contains(fid))
 								{
 									osMap.put(fid, {
-										if (config.getCombinedFileIsLocal) 
-											new FileOutputStream(new File(config.getCombinedFilesFolder + fid + ".sam"))
-										else 
-											hdfsManager.openStream(config.getCombinedFilesFolder + fid + ".sam")
+										val os = {
+											if (config.getCombinedFileIsLocal)
+												new FileOutputStream(new File(config.getCombinedFilesFolder + fid + ".sam"))
+											else
+												hdfsManager.openStream(config.getCombinedFilesFolder + fid + ".sam")
+										}
+										if (!writeHeaderSep)
+											os.write(hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/header"))
+										os
 									})
 								}
 								
