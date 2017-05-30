@@ -57,7 +57,7 @@ def executeStreamBWA():
 	ignoreListStr = "" if (len(ignoreListPath) == 0) else ("," + ignoreListPath)
 	
 	cmdStr = "$SPARK_HOME/bin/spark-submit " + \
-	"--class \"StreamBWA\" --master " + mode + " --files " + configFilePath + "," + toolsStr + ignoreListStr + " " + \
+	"--class \"hmushtaq.streambwa.StreamBWA\" --master " + mode + " --files " + configFilePath + "," + toolsStr + ignoreListStr + " " + \
 	"--driver-memory " + driver_mem + " --executor-memory " + exe_mem + " " + \
 	"--num-executors " + numExecutors + " --executor-cores " + numTasks + " " + \
 	exeName + " " + configFilePath

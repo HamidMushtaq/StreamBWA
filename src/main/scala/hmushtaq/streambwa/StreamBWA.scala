@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 Hamid Mushtaq
+ * Copyright (C) 2017 Hamid Mushtaq, TU Delft
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,6 +14,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+package hmushtaq.streambwa
+
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
@@ -27,6 +29,7 @@ import org.apache.commons.io.filefilter.WildcardFileFilter
 
 import java.io._
 import java.nio.file.{Paths, Files}
+import java.nio.charset.StandardCharsets
 import java.net._
 import java.text.DateFormat
 import java.text.SimpleDateFormat
@@ -46,7 +49,6 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 
-import tudelft.utils._
 import utils._
 
 import org.apache.commons.lang3.exception.ExceptionUtils
@@ -58,9 +60,10 @@ import htsjdk.samtools._
 
 object StreamBWA
 {
-val compressRDDs = true
+final val compressRDDs = true
+final val compLevel = 1
 //////////////////////////////////////////////////////////////////////////////
-def bwaRun (chunkNum: Int, config: Configuration) : Int =
+def bwaRun (chunkNum: Int, config: Configuration) : (Int, Int) =
 {
 	val downloadNeededFiles = config.getDownloadRef.toBoolean
 	val interleaved = config.getInterleaved.toBoolean
@@ -71,7 +74,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 	val inputFileName = if (singleFile) (x + ".fq.gz") else (x + "-1.fq.gz")
 	val inputFileName2: String = if (singleFile) null else (x + "-2.fq.gz")
 	val hdfsManager = new HDFSManager
-	var r = 0
+	var readsCount = 0
 	
 	var t0 = System.currentTimeMillis
 	
@@ -80,7 +83,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 	if (!file.exists)
 	{
 		LogWriter.dbgLog(x, t0, "!\tThe bwa program does not exist!", config)
-		return 1
+		return (1, 0)
 	}
 	val bwaPath = SparkFiles.get("bwa")
 	val bwaDir = bwaPath.split('.')(0)
@@ -90,7 +93,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 	{
 		LogWriter.dbgLog(x, t0, "download\tDownloading reference files for bwa", config)
 		if (DownloadManager.downloadBWAFiles(x, config) != 0)
-			return 1
+			return (1, 0)
 	}
 	
 	LogWriter.dbgLog(x, t0, ".\tinputFileName = " + inputFileName + ", singleFile = " + singleFile + ", streaming = " + streaming, config)
@@ -98,7 +101,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 	if (!Files.exists(Paths.get(FilesManager.getRefFilePath(config))))
 	{
 		LogWriter.dbgLog(x, t0, "!\tReference file " + FilesManager.getRefFilePath(config) + " not found on this node!", config)
-		return 1
+		return (1, 0)
 	}
 	
 	if (streaming)
@@ -110,7 +113,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 				if (!hdfsManager.exists(config.getInputFolder + "ulStatus/" + chunkNum))
 				{
 					LogWriter.dbgLog(x, t0, "#\tchunkNum = " + chunkNum + ", end.txt exists but this file doesn't!", config)
-					return 1
+					return (1, 0)
 				}
 			}
 			Thread.sleep(1000)
@@ -146,58 +149,77 @@ def bwaRun (chunkNum: Int, config: Configuration) : Int =
 	LogWriter.dbgLog(x, t0, "1\tbwa mem started: " + command_str + ". Input file size = " + (inputSize/(1024*1024)) + " MB", config)
 	//////////////////////////////////////////////////////////////////////////
 	val regMap = new scala.collection.mutable.HashMap[String, (StringBuilder, StringBuilder)]
-	val pwHeader = hdfsManager.open(config.getOutputFolder + "sam/" + chunkNum + "/header")
+	val headerSb: StringBuilder = if (config.getMakeCombinedFile) new StringBuilder else null
+	val samWriter: PrintWriter = if (config.getMakeCombinedFile) null else hdfsManager.open(config.getOutputFolder + "sam/" + chunkNum + ".sam")
 	val logger = ProcessLogger(
 		//(o: String) => {bwaOutStr.append(o + '\n')}
 		(o: String) => 
 		{
 			if (o(0) == '@')
-				pwHeader.write(o + '\n')
+			{
+				if (config.getMakeCombinedFile)
+					headerSb.append(o + '\n')
+				else
+					samWriter.write(o + '\n')
+			}
 			else
-				appendSAM(o + '\n', chunkNum, config, hdfsManager, regMap)
+			{
+				if (config.getMakeCombinedFile)
+					readsCount += appendSAM(o + '\n', chunkNum, config, hdfsManager, regMap)
+				else
+					readsCount += appendToSamWriter(o + '\n', config, samWriter)
+			}
 		}
 		,
 		(e: String) => {} // do nothing
 	)
 	command_str ! logger;
-	pwHeader.close
 	//////////////////////////////////////////////////////////////////////////
 	
 	new File(fqFileName).delete
 	if (fqFileName2 != null)
 		new File(fqFileName2).delete
-	
-	LogWriter.dbgLog(x, t0, "2\t" + "BWA finished. Now compressing and uploading the data", config)
-	val infoSb = new StringBuilder
-	val content = new StringBuilder(327680000)
-	val posContent = new StringBuilder(4096000)
-	var si = 0
-	var psi = 0
-	for ((id,sb) <- regMap)
+		
+	if (config.getMakeCombinedFile)
 	{
-		content.append(sb._1)
-		posContent.append(sb._2)
-		infoSb.append(id + '\t' + si + '\t' + sb._1.size + '\t' + psi + '\t' + sb._2.size + '\n')
-		si += sb._1.size
-		psi += sb._2.size
+		LogWriter.dbgLog(x, t0, "2\t" + "BWA finished. Now compressing with level " + compLevel + " and uploading the data", config)
+		hdfsManager.writeWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/header", headerSb.toString)
+		val gzos = new GZipOutputStreamWithCompLevel(hdfsManager.openStream(config.getOutputFolder + "sam/" + chunkNum + "/content.sam.gz"), compLevel)
+		val posWriter = hdfsManager.open(config.getOutputFolder + "sam/" + chunkNum + "/content.pos")
+		val infoSb = new StringBuilder
+		var si = 0
+		var psi = 0
+		for ((id,sb) <- regMap)
+		{
+			gzos.write(sb._1.toString.getBytes(StandardCharsets.UTF_8))
+			posWriter.write(sb._2.toString)
+			infoSb.append(id + '\t' + si + '\t' + sb._1.size + '\t' + psi + '\t' + sb._2.size + '\n')
+			si += sb._1.size
+			psi += sb._2.size
+		}
+		gzos.close
+		posWriter.close
+		hdfsManager.writeWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/info", infoSb.toString)
+		hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/" + chunkNum.toString, "")
+		LogWriter.dbgLog(x, t0, "3\t" + "Content uploaded to the HDFS, readsCount = " + readsCount, config)
 	}
-	val compressedContent = new GzipCompressor(content.toString).compress
-	hdfsManager.writeBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.sam.gz", compressedContent)
-	hdfsManager.writeWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/content.pos", posContent.toString)
-	hdfsManager.writeWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/info", infoSb.toString)
-	hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/" + chunkNum.toString, "")
+	else
+	{
+		samWriter.close
+		LogWriter.dbgLog(x, t0, "2\t" + "BWA finished. readsCount = " + readsCount, config)
+	}
 	
-	LogWriter.dbgLog(x, t0, "3\t" + "Content uploaded to the HDFS, r = " + r, config)
-	return r
+	return (0, readsCount)
 }
 
 def appendSAM(line: String, chunkNum: Int, config: Configuration, hdfsManager: HDFSManager, 
-	regMap: scala.collection.mutable.HashMap[String, (StringBuilder, StringBuilder)]) 
+	regMap: scala.collection.mutable.HashMap[String, (StringBuilder, StringBuilder)]) : Int =
 {
 	val fields = line.split('\t')
 	var id: String = "0"
 	val regionLen = config.getChrRegionLength
 	val chrID = fields(2)
+	var readsCount = 0
 	
 	if (!config.isInIgnoreList(chrID))
 	{
@@ -225,11 +247,38 @@ def appendSAM(line: String, chunkNum: Int, config: Configuration, hdfsManager: H
 		
 		val pos = fields(3)
 		regMap(id)._1.append(line)
+		readsCount += 1
 		if (regionLen != 0)
 			regMap(id)._2.append(pos + '\n')
 		else
 			regMap(id)._2.append(chrID + '\t' + pos + '\n')
 	}
+	
+	return readsCount
+}
+
+def appendToSamWriter(line: String, config: Configuration, samWriter: PrintWriter) : Int =
+{
+	var readsCount = 0
+
+	if (config.ignoreListIsEmpty)
+	{
+		samWriter.write(line)
+		readsCount = 1
+	}
+	else
+	{
+		val fields = line.split('\t')
+		val chrID = fields(2)
+		
+		if (!config.isInIgnoreList(chrID))
+		{
+			samWriter.write(line)
+			readsCount = 1
+		}
+	}
+	
+	return readsCount
 }
 
 def getTimeStamp() : String =
@@ -254,6 +303,8 @@ def combineChunks(config: Configuration)
 	if (config.getCombinedFileIsLocal) 
 	{
 		new File(config.getCombinedFilesFolder).mkdirs
+		new File(config.getCombinedFilesFolder + "sam").mkdirs
+		new File(config.getCombinedFileIsLocal + "pos").mkdirs
 		new File(config.getCombinedFilesFolder + "status").mkdirs
 	}				
 	
@@ -315,9 +366,9 @@ def combineChunks(config: Configuration)
 									osMap.put(fid, {
 										val os = {
 											if (config.getCombinedFileIsLocal)
-												new FileOutputStream(new File(config.getCombinedFilesFolder + fid + ".sam"))
+												new FileOutputStream(new File(config.getCombinedFilesFolder + "sam/" + fid + ".sam"))
 											else
-												hdfsManager.openStream(config.getCombinedFilesFolder + fid + ".sam")
+												hdfsManager.openStream(config.getCombinedFilesFolder + "sam/" + fid + ".sam")
 										}
 										if (!writeHeaderSep)
 											os.write(hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/header"))
@@ -326,9 +377,9 @@ def combineChunks(config: Configuration)
 									
 									posOsMap.put(fid, {
 										if (config.getCombinedFileIsLocal)
-											new FileOutputStream(new File(config.getCombinedFilesFolder + fid + ".pos"))
+											new FileOutputStream(new File(config.getCombinedFilesFolder + "pos/" + fid + ".pos"))
 										else
-											hdfsManager.openStream(config.getCombinedFilesFolder + fid + ".pos")
+											hdfsManager.openStream(config.getCombinedFilesFolder + "pos/" + fid + ".pos")
 									})
 								}
 								
@@ -381,6 +432,7 @@ def main(args: Array[String])
 		hdfsManager.create("errorLog.txt")
 	
 	var t0 = System.currentTimeMillis
+	var totalReads = 0
 	//////////////////////////////////////////////////////////////////////////
 	val streaming = config.getStreaming.toBoolean
 	if (makeCombinedFile)
@@ -400,7 +452,7 @@ def main(args: Array[String])
 		val inputFileNumbers = inputFileNames.map(x => {val a = x.split('.'); val b = a(0).split('-'); b(0).toInt}).toSet.toArray
 		scala.util.Sorting.quickSort(inputFileNumbers)
 		val inputData = sc.parallelize(inputFileNumbers, inputFileNumbers.size) 
-		inputData.foreach(x => bwaRun(x, bcConfig.value))
+		totalReads = inputData.map(x => bwaRun(x, bcConfig.value)).map(_._2).reduce(_+_)
 	}
 	else
 	{
@@ -412,8 +464,9 @@ def main(args: Array[String])
 		{
 			var indexes = (si until ei).toArray  
 			val inputData = sc.parallelize(indexes, indexes.size)
-			val r = inputData.map(x => bwaRun(x, bcConfig.value))
-			val finished = r.filter(_ == 1)
+			val r = inputData.map(x => bwaRun(x, bcConfig.value)).cache
+			totalReads += r.map(_._2).reduce(_+_)
+			val finished = r.filter(_._1 == 1)
 			if (finished.count > 0)
 				done = true
 			si += parTasks
@@ -426,10 +479,11 @@ def main(args: Array[String])
 	if (makeCombinedFile)
 	{
 		hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/end.txt", "")
+		hdfsManager.writeWholeFile(config.getCombinedFilesFolder + "totalReads", totalReads.toString + '\n')
 		Await.result(f, Duration.Inf)
 	}
 	et = (System.currentTimeMillis - t0) / 1000
-	LogWriter.statusLog("Total execution time:", t0, et.toString() + "\tsecs", config)
+	LogWriter.statusLog("Total execution time:", t0, et.toString() + " secs. Total reads = " + totalReads, config)
 }
 //////////////////////////////////////////////////////////////////////////////
 } // End of Class definition

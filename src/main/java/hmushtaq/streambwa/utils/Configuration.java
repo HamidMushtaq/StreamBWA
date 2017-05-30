@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 Hamid Mushtaq
+ * Copyright (C) 2017 Hamid Mushtaq, TU Delft
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,7 +14,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package tudelft.utils;
+package hmushtaq.streambwa.utils;
 
 import htsjdk.samtools.*;
 import java.io.File;
@@ -263,6 +263,11 @@ public class Configuration implements Serializable
 	{
 		return ignoreListSet.contains(s);
 	}
+	
+	public boolean ignoreListIsEmpty()
+	{
+		return ignoreListSet.isEmpty();
+	}
 		
 	public void print()
 	{
@@ -288,6 +293,7 @@ public class Configuration implements Serializable
 		System.out.println("writeHeaderSep:\t|" + writeHeaderSep + "|");
 		System.out.println("makeCombinedFile:\t|" + makeCombinedFile + "|");
 		System.out.println("chrRegionLength:\t|" + chrRegionLength + "|");
+		System.out.println("ignoreListIsEmpty:\t|" + ignoreListIsEmpty() + "|");
 		System.out.println("ignoreList:");
 		for (String s: ignoreListSet)
 			System.out.println("<" + s + ">");

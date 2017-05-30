@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 Hamid Mushtaq
+ * Copyright (C) 2017 Hamid Mushtaq, TU Delft
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -14,30 +14,29 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package utils
+package hmushtaq.streambwa.utils;
 
-
-import java.io.BufferedReader
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
-import java.io.IOException
-import java.io.InputStreamReader
-import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
-import tudelft.utils.GZIPOutputStream1
-
-class GzipCompressor(data: String)
+public class SWTimer 
 {
-	private final val COMPRESSION_LEVEL = 4
-	
-	def compress() : Array[Byte] = 
-	{
-		val bos = new ByteArrayOutputStream(data.length)
-		val gzip = new GZIPOutputStream1(bos, COMPRESSION_LEVEL)
-		gzip.write(data.getBytes)
-		gzip.close
-		val compressed = bos.toByteArray
-		bos.close
-		return compressed
+	private long st;
+	private long et;
+	private long elapsed = 0;
+
+	public void start() 
+	{ 
+		st = System.nanoTime();
 	}
+	
+	public void stop() 
+	{ 
+		et = System.nanoTime();
+		elapsed += (et - st);
+	}
+	
+	public void reset()				{elapsed = 0;}
+	public long getMicroSecs() 		{return elapsed / (long)1e3;}
+	public long getMilliSecs() 		{return elapsed / (long)1e6;}
+	public long getSecs() 			{return elapsed / (long)1e9;}
+	public float getMilliSecsF()	{return elapsed / (float)1e6;}
+	public float getSecsF() 		{return elapsed / (float)1e9;}
 }
