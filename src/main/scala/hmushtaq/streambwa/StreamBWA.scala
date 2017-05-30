@@ -52,6 +52,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import utils._
 
 import org.apache.commons.lang3.exception.ExceptionUtils
+import org.apache.commons.lang3.StringUtils
 import org.apache.spark.storage.StorageLevel._
 import org.apache.spark.HashPartitioner
 
@@ -63,7 +64,7 @@ object StreamBWA
 final val compressRDDs = true
 final val compLevel = 1
 //////////////////////////////////////////////////////////////////////////////
-def bwaRun (chunkNum: Int, config: Configuration) : (Int, Int) =
+def bwaRun (chunkNum: Int, config: Configuration) : (Int, Int, Array[(String, Int)]) =
 {
 	val downloadNeededFiles = config.getDownloadRef.toBoolean
 	val interleaved = config.getInterleaved.toBoolean
@@ -75,6 +76,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : (Int, Int) =
 	val inputFileName2: String = if (singleFile) null else (x + "-2.fq.gz")
 	val hdfsManager = new HDFSManager
 	var readsCount = 0
+	val arrayBuf = new scala.collection.mutable.ArrayBuffer[(String, Int)]()
 	
 	var t0 = System.currentTimeMillis
 	
@@ -83,7 +85,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : (Int, Int) =
 	if (!file.exists)
 	{
 		LogWriter.dbgLog(x, t0, "!\tThe bwa program does not exist!", config)
-		return (1, 0)
+		return (1, 0, Array.empty[(String, Int)])
 	}
 	val bwaPath = SparkFiles.get("bwa")
 	val bwaDir = bwaPath.split('.')(0)
@@ -93,7 +95,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : (Int, Int) =
 	{
 		LogWriter.dbgLog(x, t0, "download\tDownloading reference files for bwa", config)
 		if (DownloadManager.downloadBWAFiles(x, config) != 0)
-			return (1, 0)
+			return (1, 0, Array.empty[(String, Int)])
 	}
 	
 	LogWriter.dbgLog(x, t0, ".\tinputFileName = " + inputFileName + ", singleFile = " + singleFile + ", streaming = " + streaming, config)
@@ -101,7 +103,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : (Int, Int) =
 	if (!Files.exists(Paths.get(FilesManager.getRefFilePath(config))))
 	{
 		LogWriter.dbgLog(x, t0, "!\tReference file " + FilesManager.getRefFilePath(config) + " not found on this node!", config)
-		return (1, 0)
+		return (1, 0, Array.empty[(String, Int)])
 	}
 	
 	if (streaming)
@@ -113,7 +115,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : (Int, Int) =
 				if (!hdfsManager.exists(config.getInputFolder + "ulStatus/" + chunkNum))
 				{
 					LogWriter.dbgLog(x, t0, "#\tchunkNum = " + chunkNum + ", end.txt exists but this file doesn't!", config)
-					return (1, 0)
+					return (1, 0, Array.empty[(String, Int)])
 				}
 			}
 			Thread.sleep(1000)
@@ -192,7 +194,9 @@ def bwaRun (chunkNum: Int, config: Configuration) : (Int, Int) =
 		for ((id,sb) <- regMap)
 		{
 			gzos.write(sb._1.toString.getBytes(StandardCharsets.UTF_8))
-			posWriter.write(sb._2.toString)
+			val posStr = sb._2.toString
+			arrayBuf.append((id, StringUtils.countMatches(posStr, "\n")))
+			posWriter.write(posStr)
 			infoSb.append(id + '\t' + si + '\t' + sb._1.size + '\t' + psi + '\t' + sb._2.size + '\n')
 			si += sb._1.size
 			psi += sb._2.size
@@ -209,7 +213,7 @@ def bwaRun (chunkNum: Int, config: Configuration) : (Int, Int) =
 		LogWriter.dbgLog(x, t0, "2\t" + "BWA finished. readsCount = " + readsCount, config)
 	}
 	
-	return (0, readsCount)
+	return (0, readsCount, arrayBuf.toArray)
 }
 
 def appendSAM(line: String, chunkNum: Int, config: Configuration, hdfsManager: HDFSManager, 
@@ -433,6 +437,7 @@ def main(args: Array[String])
 	
 	var t0 = System.currentTimeMillis
 	var totalReads = 0
+	var readsPerRegion = sc.parallelize(Array.empty[(String, Int)])
 	//////////////////////////////////////////////////////////////////////////
 	val streaming = config.getStreaming.toBoolean
 	if (makeCombinedFile)
@@ -452,7 +457,11 @@ def main(args: Array[String])
 		val inputFileNumbers = inputFileNames.map(x => {val a = x.split('.'); val b = a(0).split('-'); b(0).toInt}).toSet.toArray
 		scala.util.Sorting.quickSort(inputFileNumbers)
 		val inputData = sc.parallelize(inputFileNumbers, inputFileNumbers.size) 
-		totalReads = inputData.map(x => bwaRun(x, bcConfig.value)).map(_._2).reduce(_+_)
+		val bwaOut = inputData.map(x => bwaRun(x, bcConfig.value)).cache
+		totalReads = bwaOut.map(_._2).reduce(_+_)
+		if (makeCombinedFile)
+			// RDD[Array(Array(String, Int))]. After flatMap -> RDD[Array(String, Int)]. After reduceByKey -> RDD[(String, Int)] 
+			readsPerRegion = bwaOut.map(_._3).flatMap(x => x).reduceByKey((a, b) => a + b)
 	}
 	else
 	{
@@ -465,6 +474,12 @@ def main(args: Array[String])
 			var indexes = (si until ei).toArray  
 			val inputData = sc.parallelize(indexes, indexes.size)
 			val r = inputData.map(x => bwaRun(x, bcConfig.value)).cache
+			if (makeCombinedFile)
+			{
+				// RDD[Array(Array(String, Int))]. After flatMap -> RDD[Array(String, Int)]. After reduceByKey -> RDD[(String, Int)] 
+				val rpr = r.map(_._3).flatMap(x => x)
+				readsPerRegion = readsPerRegion.union(rpr).reduceByKey((a, b) => a + b)
+			}
 			totalReads += r.map(_._2).reduce(_+_)
 			val finished = r.filter(_._1 == 1)
 			if (finished.count > 0)
@@ -479,7 +494,19 @@ def main(args: Array[String])
 	if (makeCombinedFile)
 	{
 		hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/end.txt", "")
-		hdfsManager.writeWholeFile(config.getCombinedFilesFolder + "totalReads", totalReads.toString + '\n')
+		val readsRegArray = readsPerRegion.sortBy(_._2).collect
+		val avgReadsPerReg = totalReads / readsRegArray.size
+		val hdfsWriter = hdfsManager.open(config.getCombinedFilesFolder + "readsPerRegion")
+		hdfsWriter.write("%Total regions = " + readsRegArray.size + ", Total reads = " + totalReads + 
+				", Avg reads per region = " + avgReadsPerReg + "\n")
+		for (e <- readsRegArray)
+		{
+			val regID = e._1
+			val reads = e._2
+			val loadBalSegments = (reads.toFloat / avgReadsPerReg).toInt
+			hdfsWriter.write(regID + '\t' + loadBalSegments + '\t' + reads + '\n')
+		}
+		hdfsWriter.close
 		Await.result(f, Duration.Inf)
 	}
 	et = (System.currentTimeMillis - t0) / 1000
