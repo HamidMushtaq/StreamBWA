@@ -437,6 +437,7 @@ def main(args: Array[String])
 	
 	var t0 = System.currentTimeMillis
 	var totalReads = 0
+	var unmappedReads = 0
 	var readsPerRegion = sc.parallelize(Array.empty[(String, Int)])
 	//////////////////////////////////////////////////////////////////////////
 	val streaming = config.getStreaming.toBoolean
@@ -494,17 +495,20 @@ def main(args: Array[String])
 	if (makeCombinedFile)
 	{
 		hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/end.txt", "")
-		val readsRegArray = readsPerRegion.sortBy(_._2).collect
-		val avgReadsPerReg = totalReads / readsRegArray.size
+		val readsRegMap = readsPerRegion.collectAsMap
+		val totalReadsSansUnmapped = if (readsRegMap.contains("unmapped")) (totalReads - readsRegMap("unmapped")) else totalReads
+		val numOfRegions = if (readsRegMap.contains("unmapped")) (readsRegMap.size - 1) else readsRegMap.size
+		val avgReadsPerReg = totalReadsSansUnmapped / numOfRegions
 		val hdfsWriter = hdfsManager.open(config.getCombinedFilesFolder + "readsPerRegion")
-		hdfsWriter.write("%Total regions = " + readsRegArray.size + ", Total reads = " + totalReads + 
-				", Avg reads per region = " + avgReadsPerReg + "\n")
-		for (e <- readsRegArray)
+		hdfsWriter.write("%Total regions = " + numOfRegions + ", Total reads = " + totalReads + 
+				", Total reads - unmapped reads = " + totalReadsSansUnmapped + ", Avg reads per region = " + avgReadsPerReg + "\n")
+		for (e <- readsRegMap.toSeq.sortBy(_._2))
 		{
 			val regID = e._1
 			val reads = e._2
-			val loadBalSegments = (reads.toFloat / avgReadsPerReg).toInt
-			hdfsWriter.write(regID + '\t' + loadBalSegments + '\t' + reads + '\n')
+			val loadBalSegments = Math.round(reads.toFloat / avgReadsPerReg)
+			if (regID != "unmapped")
+				hdfsWriter.write(regID + '\t' + loadBalSegments + '\t' + reads + '\n')
 		}
 		hdfsWriter.close
 		Await.result(f, Duration.Inf)
