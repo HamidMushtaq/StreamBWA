@@ -28,7 +28,7 @@ import java.nio.charset.Charset;
 
 public class HDFSManager
 {
-	private final static boolean DISABLE_CACHE = true;
+	private final static boolean DISABLE_CACHE = false;
 	private org.apache.hadoop.conf.Configuration config;
 	private FileSystem fs;
 	

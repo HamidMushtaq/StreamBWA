@@ -223,13 +223,14 @@ def appendSAM(line: String, chunkNum: Int, config: Configuration, hdfsManager: H
 	var id: String = "0"
 	val regionLen = config.getChrRegionLength
 	val chrID = fields(2)
+	val flags = fields(1).toInt
 	var readsCount = 0
 	
 	if (!config.isInIgnoreList(chrID))
 	{
 		if (regionLen != 0)
 		{
-			if (chrID == "*")
+			if ((chrID == "*") || ((flags & 4) > 0))
 				id = "unmapped"
 			else
 			{
@@ -273,7 +274,11 @@ def appendToSamWriter(line: String, config: Configuration, samWriter: PrintWrite
 	else
 	{
 		val fields = line.split('\t')
-		val chrID = fields(2)
+		val flags = fields(1).toInt
+		var chrID = fields(2)
+		
+		if ((flags & 4) > 0)
+			chrID = "*"
 		
 		if (!config.isInIgnoreList(chrID))
 		{
