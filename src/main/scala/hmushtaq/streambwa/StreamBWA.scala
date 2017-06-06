@@ -222,10 +222,13 @@ def appendSAM(line: String, chunkNum: Int, config: Configuration, hdfsManager: H
 	val fields = line.split('\t')
 	var id: String = "0"
 	val regionLen = config.getChrRegionLength
-	val chrID = fields(2)
+	var chrID = fields(2)
 	val flags = fields(1).toInt
 	var readsCount = 0
 	
+	if ((flags & 4) > 0)
+		chrID = "*"
+		
 	if (!config.isInIgnoreList(chrID))
 	{
 		if (regionLen != 0)
