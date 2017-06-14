@@ -184,28 +184,54 @@ def bwaRun (chunkNum: Int, config: Configuration) : (Int, Int, Array[(String, In
 		
 	if (config.getMakeCombinedFile)
 	{
-		LogWriter.dbgLog(x, t0, "2\t" + "BWA finished. Now compressing with level " + compLevel + " and uploading the data", config)
+		val extraParamsArray = config.getExtraBWAParams.split("\\s+")
+		val indexOfThreadArg = extraParamsArray.indexOf("-t")
+		val nThreads = if (indexOfThreadArg != -1) extraParamsArray(indexOfThreadArg+1).toInt else 1
+		LogWriter.dbgLog(x, t0, "2\t" + "BWA finished. Now compressing with level " + compLevel + " and uploading. nThreads = " + nThreads, config)
 		hdfsManager.writeWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/header", headerSb.toString)
-		val gzos = new GZipOutputStreamWithCompLevel(hdfsManager.openStream(config.getOutputFolder + "sam/" + chunkNum + "/content.sam.gz"), compLevel)
+		val os = hdfsManager.openStream(config.getOutputFolder + "sam/" + chunkNum + "/content.bin")
 		val posWriter = hdfsManager.open(config.getOutputFolder + "sam/" + chunkNum + "/content.pos")
 		val infoSb = new StringBuilder
 		var si = 0
 		var psi = 0
-		for ((id,sb) <- regMap)
+		//////////////////////////////////////////////////////////////////////
+		try
 		{
-			gzos.write(sb._1.toString.getBytes(StandardCharsets.UTF_8))
-			val posStr = sb._2.toString
-			arrayBuf.append((id, StringUtils.countMatches(posStr, "\n")))
-			posWriter.write(posStr)
-			infoSb.append(id + '\t' + si + '\t' + sb._1.size + '\t' + psi + '\t' + sb._2.size + '\n')
-			si += sb._1.size
-			psi += sb._2.size
+			val parMap = regMap.par
+			parMap.tasksupport = new ForkJoinTaskSupport(new scala.concurrent.forkjoin.ForkJoinPool(nThreads))
+			val arr = parMap.map{case (id, sb) => {
+					val compressedContent = new GzipCompressor(sb._1.toString, compLevel).compress
+					(id, (compressedContent, sb._2.toString))
+				}
+			}.toArray
+			//////////////////////////////////////////////////////////////////////
+			
+			for (e <- arr)
+			{
+				val id = e._1
+				val compressedContent = e._2._1
+				val posStr = e._2._2
+				os.write(compressedContent)
+				arrayBuf.append((id, StringUtils.countMatches(posStr, "\n")))
+				posWriter.write(posStr)
+				infoSb.append(id + '\t' + si + '\t' + compressedContent.size + '\t' + psi + '\t' + posStr.size + '\n')
+				si += compressedContent.size
+				psi += posStr.size
+			}
+			os.close
+			posWriter.close
+			hdfsManager.writeWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/info", infoSb.toString)
+			hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/" + chunkNum.toString, "")
+			LogWriter.dbgLog(x, t0, "3\t" + "Content uploaded to the HDFS, readsCount = " + readsCount, config)
 		}
-		gzos.close
-		posWriter.close
-		hdfsManager.writeWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/info", infoSb.toString)
-		hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/" + chunkNum.toString, "")
-		LogWriter.dbgLog(x, t0, "3\t" + "Content uploaded to the HDFS, readsCount = " + readsCount, config)
+		catch 
+		{
+			case e: Exception => {
+				LogWriter.dbgLog(x, t0, "exception\tAn exception occurred in the compressing and uploading part: " + ExceptionUtils.getStackTrace(e), config)
+				LogWriter.statusLog("Error:", t0, "Error in processing bwa chunk", config)
+				return (1, 0, Array.empty[(String, Int)])
+			}
+		}
 	}
 	else
 	{
@@ -350,8 +376,7 @@ def combineChunks(config: Configuration)
 					futures(fi) = Future
 					{
 						val info = hdfsManager.readWholeFile(config.getOutputFolder + "sam/" + chunkNum + "/info").split('\n')
-						val baContent = hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.sam.gz")
-						val ba = new GzipDecompressor(baContent).decompressToBytes
+						val baContent = hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.bin")
 						val pba = hdfsManager.readBytes(config.getOutputFolder + "sam/" + chunkNum + "/content.pos")
 						
 						doneSet.synchronized
@@ -395,7 +420,8 @@ def combineChunks(config: Configuration)
 									})
 								}
 								
-								osMap(fid).write(ba, si, len)
+								val ba = new GzipDecompressor(baContent.slice(si, si+len)).decompressToByteArray
+								osMap(fid).write(ba)
 								posOsMap(fid).write(pba, psi, plen)
 							}	
 							hdfsManager.writeWholeFile(config.getCombinedFilesFolder + "status/" + chunkNum, "")

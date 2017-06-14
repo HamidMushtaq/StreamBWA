@@ -16,31 +16,19 @@
  */
 package hmushtaq.streambwa.utils
 
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import java.util.zip.GZIPInputStream
-import org.apache.commons.io.IOUtils
+import java.nio.charset.StandardCharsets
 
-class GzipDecompressor(compressed: Array[Byte])
+class GzipCompressor(data: String, compLevel: Int)
 {
-	def decompressToBytes() : Array[Byte] =
+	def compress() : Array[Byte] = 
 	{
-		val out = new ByteArrayOutputStream()
-		IOUtils.copy(new GZIPInputStream(new ByteArrayInputStream(compressed)), out)
-		return out.toByteArray
-	}
-	
-	def decompress() : String = 
-	{
-		val out = new ByteArrayOutputStream()
-		IOUtils.copy(new GZIPInputStream(new ByteArrayInputStream(compressed)), out)
-		return out.toString("UTF-8")
-	}
-	
-	def decompressToByteArray() : Array[Byte] = 
-	{
-		val out = new ByteArrayOutputStream()
-		IOUtils.copy(new GZIPInputStream(new ByteArrayInputStream(compressed)), out)
-		return out.toByteArray
+		val bos = new ByteArrayOutputStream(data.length)
+		val gzos = new GZipOutputStreamWithCompLevel(bos, compLevel)
+		
+		gzos.write(data.getBytes(StandardCharsets.UTF_8))
+		gzos.close
+		
+		return bos.toByteArray
 	}
 }
