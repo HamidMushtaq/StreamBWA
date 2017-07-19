@@ -52,6 +52,12 @@ outputFolderChunker = doc.getElementsByTagName("outputFolder")[0].firstChild.dat
 driver_mem_chunker = doc.getElementsByTagName("driverMemGB")[0].firstChild.data + "g"
 
 def executeStreamBWA():	
+	dictHDFSPath = refPath.replace(".fasta", ".dict")
+	dictPath = './' + dictHDFSPath[dictHDFSPath.rfind('/') + 1:]
+	
+	if not os.path.exists(dictPath):
+		os.system("hadoop fs -get " + dictHDFSPath)
+	
 	if not (os.path.exists(toolsFolder) and os.path.isdir(toolsFolder)):
 		print "The specified tools folder (" + toolsFolder + ") doesn't exist!"
 		sys.exit(1)
@@ -70,7 +76,8 @@ def executeStreamBWA():
 	ignoreListStr = "" if (len(ignoreListPath) == 0) else ("," + ignoreListPath)
 	
 	cmdStr = "$SPARK_HOME/bin/spark-submit " + \
-	"--class \"hmushtaq.streambwa.StreamBWA\" --master " + mode + " --files " + configFilePath + "," + toolsStr + ignoreListStr + " " + \
+	"--class \"hmushtaq.streambwa.StreamBWA\" --master " + mode + " " + \
+	"--files " + configFilePath + "," + dictPath + "," + toolsStr + ignoreListStr + " " + \
 	"--driver-memory " + driver_mem + " --executor-memory " + exe_mem + " " + \
 	"--num-executors " + numExecutors + " --executor-cores " + numTasks + " " + \
 	exeName + " " + configFilePath
