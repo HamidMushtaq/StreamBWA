@@ -47,10 +47,13 @@ public class Configuration implements Serializable
 	private String downloadRef;
 	private String combinedFilesFolder;
 	private String combinerThreads;
+	private String sortedBAMPath;
 	private HashSet<String> ignoreListSet;
 	private boolean combinedFileIsLocal;
 	private boolean makeCombinedFile;
 	private boolean inClientMode;
+	private boolean sortedBAMIsLocal;	
+	private boolean makeSortedBAM;
 	private String writeHeaderSep;
 	private Long chrRegionLength;
 	
@@ -108,6 +111,16 @@ public class Configuration implements Serializable
 			String chrRegionLengthStr = document.getElementsByTagName("chrRegionLength").item(0).getTextContent().trim();
 			float chrRegionLengthF = Float.valueOf(chrRegionLengthStr);
 			chrRegionLength = (long)chrRegionLengthF;
+			
+			sortedBAMPath = emptyIfTagDoesntExist(document, "sortedBAMPath");
+			makeSortedBAM = !sortedBAMPath.equals("");
+			sortedBAMFileIsLocal = false;
+			if (!sortedBAMPath.equals(""))
+			{
+				sortedBAMIsLocal = sortedBAMPath.startsWith("local:");
+				if (sortedBAMFileIsLocal)
+					sortedBAMPath = sortedBAMPath.substring(6);
+			}
 		
 			startTime = System.currentTimeMillis();
 		}
@@ -116,6 +129,15 @@ public class Configuration implements Serializable
 			e.printStackTrace();
 			System.exit(1);
 		}
+	}
+	
+	private String emptyIfTagDoesntExist(Document document, String tag)
+	{
+		NodeList nl = document.getElementsByTagName(tag);
+		if (nl.getLength() > 0)
+			return nl.item(0).getTextContent();
+		else 
+			return "";
 	}
 	
 	private String correctFolderName(String s)
@@ -239,14 +261,29 @@ public class Configuration implements Serializable
 		return combinerThreads;
 	}
 	
+	public String getSortedBAMPath()
+	{
+		return sortedBAMPath;
+	}
+	
 	public boolean getMakeCombinedFile()
 	{
 		return makeCombinedFile;
 	}
 	
+	public boolean getMakeSortedBAM()
+	{
+		return makeSortedBAM;
+	}
+	
 	public boolean getCombinedFileIsLocal()
 	{
 		return combinedFileIsLocal;
+	}
+	
+	public boolean getSortedBAMIsLocal()
+	{
+		return sortedBAMIsLocal;
 	}
 	
 	public String getWriteHeaderSep()
