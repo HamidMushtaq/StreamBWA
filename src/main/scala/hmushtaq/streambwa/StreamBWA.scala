@@ -422,6 +422,7 @@ def main(args: Array[String])
 {
 	val conf = new SparkConf().setAppName("StreamBWA")
 	val sc = new SparkContext(conf)
+	val part = args(1).toInt
 	
 	if (compressRDDs)
 		conf.set("spark.rdd.compress","true")
@@ -431,12 +432,10 @@ def main(args: Array[String])
 	//Logger.getLogger("akka").setLevel(Level.OFF);
 	
 	val config = new Configuration()
-	config.initialize(args(0), sc.deployMode)
+	config.initialize(args(0), sc.deployMode, args(1))
 	config.print() 
 	val bcConfig = sc.broadcast(config)
 	val hdfsManager = new HDFSManager
-	val makeCombinedFile = config.getMakeCombinedFile
-	var f: Future[Unit] = null
 	
 	if (!hdfsManager.exists("sparkLog.txt"))
 		hdfsManager.create("sparkLog.txt")
@@ -444,85 +443,99 @@ def main(args: Array[String])
 		hdfsManager.create("errorLog.txt")
 	
 	var t0 = System.currentTimeMillis
-	var totalReads = 0
-	var unmappedReads = 0
-	var readsPerRegion = sc.parallelize(Array.empty[(String, Int)])
-	//////////////////////////////////////////////////////////////////////////
-	val streaming = config.getStreaming.toBoolean
-	if (makeCombinedFile)
-		f = Future {combineChunks(config)}
 	
-	if (!streaming)
+	var totalReads = 0
+	if (part == 1)
 	{
-		val inputFileNames = FilesManager.getInputFileNames(config.getInputFolder, config).filter(x => x.contains(".fq")) 
-		if (inputFileNames == null)
-		{
-			println("The input directory " + config.getInputFolder() + " does not exist!")
-			System.exit(1)
-		}
-		inputFileNames.foreach(println)
-		
-		// Give chunks to bwa instances
-		val inputFileNumbers = inputFileNames.map(x => {val a = x.split('.'); val b = a(0).split('-'); b(0).toInt}).toSet.toArray
-		scala.util.Sorting.quickSort(inputFileNumbers)
-		val inputData = sc.parallelize(inputFileNumbers, inputFileNumbers.size) 
-		val bwaOut = inputData.map(x => bwaRun(x, bcConfig.value)).cache
-		totalReads = bwaOut.map(_._2).reduce(_+_)
+		val makeCombinedFile = config.getMakeCombinedFile
+		var f: Future[Unit] = null
+		var unmappedReads = 0
+		var readsPerRegion = sc.parallelize(Array.empty[(String, Int)])
+		//////////////////////////////////////////////////////////////////////////
+		val streaming = config.getStreaming.toBoolean
 		if (makeCombinedFile)
-			// RDD[Array(Array(String, Int))]. After flatMap -> RDD[Array(String, Int)]. After reduceByKey -> RDD[(String, Int)] 
-			readsPerRegion = bwaOut.map(_._3).flatMap(x => x).reduceByKey((a, b) => a + b)
+			f = Future {combineChunks(config)}
+		
+		if (!streaming)
+		{
+			val inputFileNames = FilesManager.getInputFileNames(config.getInputFolder, config).filter(x => x.contains(".fq")) 
+			if (inputFileNames == null)
+			{
+				println("The input directory " + config.getInputFolder() + " does not exist!")
+				System.exit(1)
+			}
+			inputFileNames.foreach(println)
+			
+			// Give chunks to bwa instances
+			val inputFileNumbers = inputFileNames.map(x => {val a = x.split('.'); val b = a(0).split('-'); b(0).toInt}).toSet.toArray
+			scala.util.Sorting.quickSort(inputFileNumbers)
+			val inputData = sc.parallelize(inputFileNumbers, inputFileNumbers.size) 
+			val bwaOut = inputData.map(x => bwaRun(x, bcConfig.value)).cache
+			totalReads = bwaOut.map(_._2).reduce(_+_)
+			if (makeCombinedFile)
+				// RDD[Array(Array(String, Int))]. After flatMap -> RDD[Array(String, Int)]. After reduceByKey -> RDD[(String, Int)] 
+				readsPerRegion = bwaOut.map(_._3).flatMap(x => x).reduceByKey((a, b) => a + b)
+		}
+		else
+		{
+			var done = false
+			val parTasks = config.getGroupSize.toInt
+			var si = 0
+			var ei = parTasks
+			while(!done)
+			{
+				var indexes = (si until ei).toArray  
+				val inputData = sc.parallelize(indexes, indexes.size)
+				val r = inputData.map(x => bwaRun(x, bcConfig.value)).cache
+				if (makeCombinedFile)
+				{
+					// RDD[Array(Array(String, Int))]. After flatMap -> RDD[Array(String, Int)]. After reduceByKey -> RDD[(String, Int)] 
+					val rpr = r.map(_._3).flatMap(x => x)
+					readsPerRegion = readsPerRegion.union(rpr).reduceByKey((a, b) => a + b)
+				}
+				totalReads += r.map(_._2).reduce(_+_)
+				val finished = r.filter(_._1 == 1)
+				if (finished.count > 0)
+					done = true
+				si += parTasks
+				ei += parTasks
+			}
+		}
+		//////////////////////////////////////////////////////////////////////
+		var et = (System.currentTimeMillis - t0) / 1000
+		LogWriter.statusLog("Execution time of streambwa:", t0, et.toString() + "\tsecs", config)
+		if (makeCombinedFile)
+		{
+			hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/end.txt", "")
+			val readsRegMap = readsPerRegion.collectAsMap
+			val totalReadsSansUnmapped = if (readsRegMap.contains("unmapped")) (totalReads - readsRegMap("unmapped")) else totalReads
+			val numOfRegions = if (readsRegMap.contains("unmapped")) (readsRegMap.size - 1) else readsRegMap.size
+			val avgReadsPerReg = totalReadsSansUnmapped / numOfRegions
+			val hdfsWriter = hdfsManager.open(config.getCombinedFilesFolder + "readsPerRegion")
+			hdfsWriter.write("%Total regions = " + numOfRegions + ", Total reads = " + totalReads + 
+					", Total reads - unmapped reads = " + totalReadsSansUnmapped + ", Avg reads per region = " + avgReadsPerReg + "\n")
+			for (e <- readsRegMap.toSeq.sortBy(_._2))
+			{
+				val regID = e._1
+				val reads = e._2
+				val loadBalSegments = Math.round(reads.toFloat / avgReadsPerReg)
+				if (regID != "unmapped")
+					hdfsWriter.write(regID + '\t' + loadBalSegments + '\t' + reads + '\n')
+			}
+			hdfsWriter.close
+			Await.result(f, Duration.Inf)
+		}
 	}
 	else
 	{
-		var done = false
-		val parTasks = config.getGroupSize.toInt
-		var si = 0
-		var ei = parTasks
-		while(!done)
-		{
-			var indexes = (si until ei).toArray  
-			val inputData = sc.parallelize(indexes, indexes.size)
-			val r = inputData.map(x => bwaRun(x, bcConfig.value)).cache
-			if (makeCombinedFile)
-			{
-				// RDD[Array(Array(String, Int))]. After flatMap -> RDD[Array(String, Int)]. After reduceByKey -> RDD[(String, Int)] 
-				val rpr = r.map(_._3).flatMap(x => x)
-				readsPerRegion = readsPerRegion.union(rpr).reduceByKey((a, b) => a + b)
-			}
-			totalReads += r.map(_._2).reduce(_+_)
-			val finished = r.filter(_._1 == 1)
-			if (finished.count > 0)
-				done = true
-			si += parTasks
-			ei += parTasks
-		}
+		val posFolder = config.getCombinedFilesFolder + "pos"
+		val posFileNames = FilesManager.getInputFileNames(posFolder, config)
+		// <chrIndex, filename without ext>
+		val posFileNamesWithIndex = posFileNames.map(x => (x.split('-')(0), x)).map(x => (config.getChrIndex(x._1), x._2.split('.')(0)))
+		for(e <- posFileNamesWithIndex)
+			println(e._1 + " : " + e._2)
 	}
-	//////////////////////////////////////////////////////////////////////
-	var et = (System.currentTimeMillis - t0) / 1000
-	LogWriter.statusLog("Execution time of streambwa:", t0, et.toString() + "\tsecs", config)
-	if (makeCombinedFile)
-	{
-		hdfsManager.writeWholeFile(config.getOutputFolder + "ulStatus/end.txt", "")
-		val readsRegMap = readsPerRegion.collectAsMap
-		val totalReadsSansUnmapped = if (readsRegMap.contains("unmapped")) (totalReads - readsRegMap("unmapped")) else totalReads
-		val numOfRegions = if (readsRegMap.contains("unmapped")) (readsRegMap.size - 1) else readsRegMap.size
-		val avgReadsPerReg = totalReadsSansUnmapped / numOfRegions
-		val hdfsWriter = hdfsManager.open(config.getCombinedFilesFolder + "readsPerRegion")
-		hdfsWriter.write("%Total regions = " + numOfRegions + ", Total reads = " + totalReads + 
-				", Total reads - unmapped reads = " + totalReadsSansUnmapped + ", Avg reads per region = " + avgReadsPerReg + "\n")
-		for (e <- readsRegMap.toSeq.sortBy(_._2))
-		{
-			val regID = e._1
-			val reads = e._2
-			val loadBalSegments = Math.round(reads.toFloat / avgReadsPerReg)
-			if (regID != "unmapped")
-				hdfsWriter.write(regID + '\t' + loadBalSegments + '\t' + reads + '\n')
-		}
-		hdfsWriter.close
-		Await.result(f, Duration.Inf)
-	}
-	et = (System.currentTimeMillis - t0) / 1000
-	LogWriter.statusLog("Total execution time:", t0, et.toString() + " secs. Total reads = " + totalReads, config)
+	LogWriter.statusLog("Total execution time:", t0, ((System.currentTimeMillis - t0) / 1000) + " secs. Total reads = " + totalReads, config)
 }
 //////////////////////////////////////////////////////////////////////////////
 } // End of Class definition

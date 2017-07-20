@@ -11,25 +11,19 @@ import subprocess
 import multiprocessing
 import glob
 
-if len(sys.argv) < 4:
+if len(sys.argv) < 3:
 	print("Not enough arguments!")
-	print("Example of usage: ./runWithChunker.py streambwa_2.11-1.0.jar config.xml chunkerConfig.xml")
+	print("Example of usage: ./runSort.py streambwa_2.11-1.0.jar config.xml")
 	sys.exit(1)
 
 exeName = sys.argv[1]
-chunkerExeName = "chunker_2.11-1.0.jar"
 logFile = "timings.txt"
 configFilePath = sys.argv[2]
-chunkerConfigFilePath = sys.argv[3]
 
 if not os.path.isfile(configFilePath):
 	print("Config file " + configFilePath + " does not exist!")
 	sys.exit(1)
 	
-if not os.path.isfile(chunkerConfigFilePath):
-	print("Chunker's config file " + chunkerConfigFilePath + " does not exist!")
-	sys.exit(1)
-		
 doc = minidom.parse(configFilePath)
 mode = doc.getElementsByTagName("mode")[0].firstChild.data
 refPath = doc.getElementsByTagName("refPath")[0].firstChild.data
@@ -40,16 +34,9 @@ toolsFolder = doc.getElementsByTagName("toolsFolder")[0].firstChild.data
 numExecutors = doc.getElementsByTagName("numExecutors")[0].firstChild.data
 ignoreList = doc.getElementsByTagName("ignoreList")[0].firstChild
 ignoreListPath = "" if (ignoreList == None) else ignoreList.data.strip()
-numTasks = doc.getElementsByTagName("numTasks1")[0].firstChild.data
+numTasks = doc.getElementsByTagName("numTasks2")[0].firstChild.data
 exe_mem = doc.getElementsByTagName("execMemGB")[0].firstChild.data + "g"
 driver_mem = doc.getElementsByTagName("driverMemGB")[0].firstChild.data + "g"
-
-doc = minidom.parse(chunkerConfigFilePath)
-inputFileName = doc.getElementsByTagName("fastq1Path")[0].firstChild.data
-fastq2Path = doc.getElementsByTagName("fastq2Path")[0].firstChild
-inputFileName2 = "" if (fastq2Path == None) else fastq2Path.data
-outputFolderChunker = doc.getElementsByTagName("outputFolder")[0].firstChild.data
-driver_mem_chunker = doc.getElementsByTagName("driverMemGB")[0].firstChild.data + "g"
 
 def executeStreamBWA():	
 	dictHDFSPath = refPath.replace(".fasta", ".dict")
@@ -81,42 +68,20 @@ def executeStreamBWA():
 	"--files " + configFilePath + "," + dictPath + "," + toolsStr + ignoreListStr + " " + \
 	"--driver-memory " + driver_mem + " --executor-memory " + exe_mem + " " + \
 	"--num-executors " + numExecutors + " --executor-cores " + numTasks + " " + \
-	exeName + " " + configFilePath + " 1"
+	exeName + " " + configFilePath + " 2"
 	
 	print cmdStr
 	addToLog("[" + time.ctime() + "] " + cmdStr)
 	os.system(cmdStr)
-	
-def executeChunker():
-	cmdStr = "$SPARK_HOME/bin/spark-submit " + \
-	"--class \"hmushtaq.fastqchunker.Chunker\" --master local[*] --driver-memory " + driver_mem_chunker + " " + chunkerExeName + " " + chunkerConfigFilePath
-	
-	print cmdStr
-	os.system(cmdStr)
-	
+		
 def addToLog(s):
 	f = open(logFile,'a+')
 	f.write(s + "\n")
 	f.close() 
 
 start_time = time.time()
-
-if outputFolderChunker != inputFolder:
-	print "The output folder of chunker: " + outputFolderChunker + ", is different than the input folder: " + inputFolder
-	sys.exit(1)
 	
-# Remove the HDFS folders
-os.system("hadoop fs -rm -r -f -skipTrash " + inputFolder)
-os.system("hadoop fs -rm -r -f -skipTrash " + outputFolder)
-# Start chunker
-job1 = multiprocessing.Process(target=executeChunker)
-job1.start()
-# Start streamBWA
-job2 = multiprocessing.Process(target=executeStreamBWA)
-job2.start()
-# Wait for both jobs to finish
-job1.join()
-job2.join()
+executeStreamBWA()
 
 addToLog("[" + time.ctime() + "]")
 	

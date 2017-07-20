@@ -21,7 +21,7 @@ import java.io.File;
 import java.nio.file.*;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.DocumentBuilder;
-import org.w3c.dom.Document;
+import org.w3c.dom.*;
 import java.io.Serializable;
 import java.lang.System;
 import java.util.*;
@@ -48,16 +48,19 @@ public class Configuration implements Serializable
 	private String combinedFilesFolder;
 	private String combinerThreads;
 	private String sortedBAMPath;
+	private SAMSequenceDictionary dict;
 	private HashSet<String> ignoreListSet;
 	private boolean combinedFileIsLocal;
 	private boolean makeCombinedFile;
 	private boolean inClientMode;
-	private boolean sortedBAMIsLocal;	
+	private boolean sortedBAMFileIsLocal;	
 	private boolean makeSortedBAM;
 	private String writeHeaderSep;
 	private Long chrRegionLength;
+	private ArrayList<Integer> chrLenArray;
+	private HashMap<String, Integer> chrNameMap;
 	
-	public void initialize(String configFilePath, String deployMode)
+	public void initialize(String configFilePath, String deployMode, String part)
 	{	
 		try
 		{
@@ -79,7 +82,7 @@ public class Configuration implements Serializable
 			tmpFolder = correctFolderName(document.getElementsByTagName("tmpFolder").item(0).getTextContent().trim());
 			sfFolder = correctFolderName(document.getElementsByTagName("sfFolder").item(0).getTextContent().trim());
 			numExecutors = document.getElementsByTagName("numExecutors").item(0).getTextContent().trim();
-			numTasks = document.getElementsByTagName("numTasks").item(0).getTextContent().trim();
+			numTasks = document.getElementsByTagName("numTasks" + part).item(0).getTextContent().trim();
 			groupSize = document.getElementsByTagName("groupSize").item(0).getTextContent().trim();
 			execMemGB = document.getElementsByTagName("execMemGB").item(0).getTextContent().trim();
 			singleEnded = document.getElementsByTagName("singleEnded").item(0).getTextContent().trim();
@@ -117,10 +120,17 @@ public class Configuration implements Serializable
 			sortedBAMFileIsLocal = false;
 			if (!sortedBAMPath.equals(""))
 			{
-				sortedBAMIsLocal = sortedBAMPath.startsWith("local:");
+				sortedBAMFileIsLocal = sortedBAMPath.startsWith("local:");
 				if (sortedBAMFileIsLocal)
 					sortedBAMPath = sortedBAMPath.substring(6);
 			}
+			
+			System.out.println("Parsing dictionary file");
+			DictParser dictParser = new DictParser(ignoreListSet);
+			dict = dictParser.parse(getFileNameFromPath(refPath).replace(".fasta", ".dict"));
+			System.out.println("\n1.Hash code of dict = " + dict.hashCode() + "\n");
+			chrLenArray = dictParser.getChrLenArray();
+			chrNameMap = dictParser.getChrNameMap();
 		
 			startTime = System.currentTimeMillis();
 		}
@@ -283,7 +293,7 @@ public class Configuration implements Serializable
 	
 	public boolean getSortedBAMIsLocal()
 	{
-		return sortedBAMIsLocal;
+		return sortedBAMFileIsLocal;
 	}
 	
 	public String getWriteHeaderSep()
@@ -304,6 +314,13 @@ public class Configuration implements Serializable
 	public boolean ignoreListIsEmpty()
 	{
 		return ignoreListSet.isEmpty();
+	}
+	
+	public int getChrIndex(String chrName)
+	{
+		if (!chrNameMap.containsKey(chrName))
+			return -1;
+		return chrNameMap.get(chrName);
 	}
 		
 	public void print()
@@ -335,5 +352,9 @@ public class Configuration implements Serializable
 		for (String s: ignoreListSet)
 			System.out.println("<" + s + ">");
 		System.out.println("*************************");
+		for (String key : chrNameMap.keySet()) {
+			System.out.println("\tChromosome " + key + " -> " + chrNameMap.get(key)); 
+		}
+		System.out.println("-------------------------");
 	}
 }
