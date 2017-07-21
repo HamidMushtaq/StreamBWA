@@ -418,6 +418,53 @@ def combineChunks(config: Configuration)
 		v.close
 }
 
+// Sorting ///////////////////////////////////////////////////////////////////
+def sortSams(regionID: String, config: Configuration) : (String, Int) =
+{
+	val hdfsManager = new HDFSManager
+	var t0 = System.currentTimeMillis
+	
+	hdfsManager.create(config.getOutputFolder + "log/sort/" + regionID)
+	
+	LogWriter.dbgLog("sort/" + regionID, t0, "Sorting positions", config)
+	// <position, index>
+	val positions = hdfsManager.readWholeFile(config.getCombinedFilesFolder + "pos/" + regionID + ".pos").split('\n').zipWithIndex
+	// <(pos, index), index2write2>
+	val sortedPos = positions.sortBy(_._1).zipWithIndex
+	val index2index = sortedPos.sortBy(_._1._2)
+	val numOfReads = index2index.size
+	val sb = new StringBuilder
+	sb.append("pos, index, index2write2")
+	for(e <- index2index)
+		sb.append(e._1._1 + '\t' + e._1._2 + '\t' + e._2 + '\n')
+	hdfsManager.writeWholeFile(config.getCombinedFilesFolder + "sortedPos/" + regionID + ".pos", sb.toString)
+	
+	// Reading the sam file and putting reads in a sorted array
+	LogWriter.dbgLog("sort/" + regionID, t0, "Sorting the reads", config)
+	val br = hdfsManager.openBufferedReader(config.getCombinedFilesFolder + "sam/" + regionID + ".sam")
+	val samLines = new Array[String](numOfReads)
+	var lineNum = 0
+	var line = br.readLine
+	while (line != null) 
+	{
+		val i = index2index(lineNum)._2.toInt
+		samLines(i) = line
+		lineNum += 1
+		line = br.readLine
+	}
+	br.close
+	// Write the sorted sam file
+	LogWriter.dbgLog("sort/" + regionID, t0, "Writing sorted reads to the sam file", config)
+	val pw = hdfsManager.open(config.getCombinedFilesFolder + "sortedSam/" + regionID + ".sam")
+	for(e <- samLines)
+		pw.println(e)
+	pw.close
+	LogWriter.dbgLog("sort/" + regionID, t0, "Done!", config)
+	
+	return (regionID, numOfReads)
+}
+//////////////////////////////////////////////////////////////////////////////
+
 def main(args: Array[String]) 
 {
 	val conf = new SparkConf().setAppName("StreamBWA")
@@ -531,9 +578,29 @@ def main(args: Array[String])
 		val posFolder = config.getCombinedFilesFolder + "pos"
 		val posFileNames = FilesManager.getInputFileNames(posFolder, config)
 		// <chrIndex, filename without ext>
-		val posFileNamesWithIndex = posFileNames.map(x => (x.split('-')(0), x)).map(x => (config.getChrIndex(x._1), x._2.split('.')(0)))
-		for(e <- posFileNamesWithIndex)
-			println(e._1 + " : " + e._2)
+		val posFileNamesWithIndex = posFileNames.map(x => (x.split('-')(0), x)).map(x => (config.getChrIndex(x._1), 
+			x._2.substring(0, x._2.length-4))).filter(x => x._1 >= 0)
+		// Sorting
+		implicit val samRecordOrdering = new Ordering[(Int, String)] {
+			override def compare(a: (Int, String), b: (Int, String)) = 
+			{
+				if (a._1 == b._1)
+				{
+					val aRegion = a._2.split('-')(1).toInt
+					val bRegion = b._2.split('-')(1).toInt
+					aRegion - bRegion
+				}
+				else
+					a._1 - b._1
+			}
+		}
+		scala.util.Sorting.stableSort(posFileNamesWithIndex)
+		val inputFileIDs = posFileNamesWithIndex.map(x => x._2)
+		val inputData = sc.parallelize(inputFileIDs, inputFileIDs.size)
+		val readsByRegion = inputData.map(x => sortSams(x, bcConfig.value)).cache
+		for(e <- readsByRegion)
+			println(e._1 + ": " + e._2)
+		totalReads = readsByRegion.map(_._2).reduce(_+_)
 	}
 	LogWriter.statusLog("Total execution time:", t0, ((System.currentTimeMillis - t0) / 1000) + " secs. Total reads = " + totalReads, config)
 }

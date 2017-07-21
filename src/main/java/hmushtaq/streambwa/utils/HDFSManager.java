@@ -129,6 +129,19 @@ public class HDFSManager
         }
 	}
 	
+	public BufferedReader openBufferedReader(String fname)
+	{
+		try
+		{			
+			FSDataInputStream is = fs.open(new Path(fname));
+			return new BufferedReader(new InputStreamReader(is, "UTF-8"), 8192000);
+		}
+		catch (IOException ex) 
+		{
+            return null;
+        }
+	}
+	
 	public String readWholeFile(String fname)
 	{
 		try
