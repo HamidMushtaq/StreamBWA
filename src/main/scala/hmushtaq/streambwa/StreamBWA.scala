@@ -459,6 +459,7 @@ def sortSams(regionID: String, config: Configuration) : (String, Int) =
 	for(e <- samLines)
 		pw.println(e)
 	pw.close
+	hdfsManager.writeWholeFile(config.getCombinedFilesFolder + "ulStatus/" + regionID, "")
 	LogWriter.dbgLog("sort/" + regionID, t0, "Done!", config)
 	
 	return (regionID, numOfReads)
