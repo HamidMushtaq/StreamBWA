@@ -456,13 +456,76 @@ def sortSams(regionID: String, config: Configuration) : (String, Int) =
 	// Write the sorted sam file
 	LogWriter.dbgLog("sort/" + regionID, t0, "Writing sorted reads to the sam file", config)
 	val pw = hdfsManager.open(config.getCombinedFilesFolder + "sortedSam/" + regionID + ".sam")
+	pw.write(hdfsManager.readWholeFile(config.getCombinedFilesFolder + "header"))
 	for(e <- samLines)
 		pw.println(e)
 	pw.close
 	hdfsManager.writeWholeFile(config.getCombinedFilesFolder + "ulStatus/" + regionID, "")
 	LogWriter.dbgLog("sort/" + regionID, t0, "Done!", config)
 	
+	//////////////////////////////////////////////////////////////////////////
+	// Read the sorted SAM file
+	val samRecsReader = new SamRecsReader(hdfsManager.openInputStream(config.getCombinedFilesFolder + "sortedSam/" + regionID + ".sam"), config)	
+	samRecsReader.parseSam
+	val samRecs = samRecsReader.getSamRecs
+	samRecsReader.close
+	LogWriter.dbgLog("sort/" + regionID, t0, "Writing to BAM", config)
+	// Write to BAM
+	val factory = new SAMFileWriterFactory
+	val writer = factory.makeBAMWriter(createHeader(config), true,  hdfsManager.openStream(config.getCombinedFilesFolder + "bam/" + regionID + ".bam"))
+	val r = writeToBAM(samRecs, writer, config)
+	writer.close
+	LogWriter.dbgLog("sort/" + regionID, t0, "BAM file written. Total reads: " + r._1 + ", good ones: " + r._2 + ", bad ones = " + r._3, config)
+	//////////////////////////////////////////////////////////////////////////
+	
 	return (regionID, numOfReads)
+}
+
+def createHeader(config: Configuration) : SAMFileHeader =
+{
+	val header = new SAMFileHeader()
+	header.setSequenceDictionary(config.getDict)
+		
+	return header
+}
+
+def writeToBAM(samRecs: Array[SAMRecord], writer: SAMFileWriter, config: Configuration) : (Integer, Integer, Integer) =
+{
+	val header = createHeader(config)
+	header.setSortOrder(SAMFileHeader.SortOrder.coordinate)
+	//////////////////////////////
+	val bamrg = new SAMReadGroupRecord(config.getRGID)
+	bamrg.setLibrary("LIB1")
+	bamrg.setPlatform("ILLUMINA")
+	bamrg.setPlatformUnit("UNIT1")
+	bamrg.setSample("SAMPLE1")
+	header.addReadGroup(bamrg)
+	/////////////////////////////
+	
+	val samRecsIter = new SamRecsIterator(samRecs, header, samRecords.size)
+	val RGID = config.getRGID
+	var count = 0
+	var badLines = 0
+	while(samRecsIter.hasNext()) 
+	{
+		val sam = samRecsIter.next
+		/////////////////////////////////////////
+		sam.setAttribute(SAMTag.RG.name(), RGID)
+		/////////////////////////////////////////
+		try
+		{
+			writer.addAlignment(sam)
+		}
+		catch
+		{
+			case e: Exception => badLines += 1
+		}
+		count += 1
+	}
+	
+	val reads = regionIter.getCount
+		
+	return (reads, count, badLines)
 }
 //////////////////////////////////////////////////////////////////////////////
 

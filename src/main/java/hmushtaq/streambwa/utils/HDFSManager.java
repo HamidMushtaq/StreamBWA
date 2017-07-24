@@ -142,6 +142,19 @@ public class HDFSManager
         }
 	}
 	
+	public InputStream openInputStream(String fname)
+	{
+		try
+		{			
+			FSDataInputStream is = fs.open(new Path(fname));
+			return is;
+		}
+		catch (IOException ex) 
+		{
+            return null;
+        }
+	}
+	
 	public String readWholeFile(String fname)
 	{
 		try
