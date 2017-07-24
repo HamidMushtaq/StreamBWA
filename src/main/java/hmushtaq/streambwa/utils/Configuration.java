@@ -171,6 +171,11 @@ public class Configuration implements Serializable
 			return path;
 	}
 	
+	public SAMSequenceDictionary getDict()
+	{
+		return dict;
+	}
+	
 	public String getRefPath()
 	{
 		return refPath;
@@ -322,7 +327,15 @@ public class Configuration implements Serializable
 			return -1;
 		return chrNameMap.get(chrName);
 	}
+	
+	public String getRGID()
+	{
+		int start = extraBWAParams.indexOf("ID:");
+		int end = extraBWAParams.indexOf("\\", start);
 		
+		return extraBWAParams.substring(start+3, end);
+	}
+	
 	public void print()
 	{
 		System.out.println("***** Configuration *****");

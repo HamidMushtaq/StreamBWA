@@ -40,7 +40,7 @@ public class SamRecsIterator
 		this.samRecords = samRecords;
 		this.header = header;
 		index = 0;
-		endIndex = size
+		endIndex = size;
 		getFirstRecord();
 	}
     

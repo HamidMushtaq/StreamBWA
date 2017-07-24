@@ -502,7 +502,7 @@ def writeToBAM(samRecs: Array[SAMRecord], writer: SAMFileWriter, config: Configu
 	header.addReadGroup(bamrg)
 	/////////////////////////////
 	
-	val samRecsIter = new SamRecsIterator(samRecs, header, samRecords.size)
+	val samRecsIter = new SamRecsIterator(samRecs, header, samRecs.size)
 	val RGID = config.getRGID
 	var count = 0
 	var badLines = 0
@@ -523,9 +523,7 @@ def writeToBAM(samRecs: Array[SAMRecord], writer: SAMFileWriter, config: Configu
 		count += 1
 	}
 	
-	val reads = regionIter.getCount
-		
-	return (reads, count, badLines)
+	return (samRecsIter.getCount, count, badLines)
 }
 //////////////////////////////////////////////////////////////////////////////
 
