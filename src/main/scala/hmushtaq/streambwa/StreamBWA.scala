@@ -428,7 +428,7 @@ def sortSams(regionID: String, config: Configuration) : (String, Int) =
 	
 	LogWriter.dbgLog("sort/" + regionID, t0, "Sorting positions", config)
 	// <position, index>
-	val positions = hdfsManager.readWholeFile(config.getCombinedFilesFolder + "pos/" + regionID + ".pos").split('\n').zipWithIndex
+	val positions = hdfsManager.readWholeFile(config.getCombinedFilesFolder + "pos/" + regionID + ".pos").split('\n').map(_.toInt).zipWithIndex
 	// <(pos, index), index2write2>
 	val sortedPos = positions.sortBy(_._1).zipWithIndex
 	val index2index = sortedPos.sortBy(_._1._2)
