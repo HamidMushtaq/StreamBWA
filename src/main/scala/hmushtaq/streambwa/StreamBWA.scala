@@ -472,7 +472,17 @@ def sortSams(regionID: String, config: Configuration) : (String, Int) =
 	LogWriter.dbgLog("sort/" + regionID, t0, "Writing to BAM", config)
 	// Write to BAM
 	val factory = new SAMFileWriterFactory
-	val writer = factory.makeBAMWriter(createHeader(config), true,  hdfsManager.openStream(config.getCombinedFilesFolder + "bam/" + regionID + ".bam"))
+	val header = createHeader(config)
+	header.setSortOrder(SAMFileHeader.SortOrder.coordinate)	
+	//////////////////////////////
+	val bamrg = new SAMReadGroupRecord(config.getRGID)
+	bamrg.setLibrary("LIB1")
+	bamrg.setPlatform("ILLUMINA")
+	bamrg.setPlatformUnit("UNIT1")
+	bamrg.setSample("SAMPLE1")
+	header.addReadGroup(bamrg)
+	/////////////////////////////
+	val writer = factory.makeBAMWriter(header, true,  hdfsManager.openStream(config.getCombinedFilesFolder + "bam/" + regionID + ".bam"))
 	val r = writeToBAM(samRecs, writer, config)
 	writer.close
 	LogWriter.dbgLog("sort/" + regionID, t0, "BAM file written. Total reads: " + r._1 + ", good ones: " + r._2 + ", bad ones = " + r._3, config)
@@ -637,6 +647,7 @@ def main(args: Array[String])
 	}
 	else
 	{
+		var f: Future[Unit] = null
 		val posFolder = config.getCombinedFilesFolder + "pos"
 		val posFileNames = FilesManager.getInputFileNames(posFolder, config)
 		// <chrIndex, filename without ext>
@@ -658,11 +669,41 @@ def main(args: Array[String])
 		}
 		scala.util.Sorting.stableSort(posFileNamesWithIndex)
 		val inputFileIDs = posFileNamesWithIndex.map(x => x._2)
-		val inputData = sc.parallelize(inputFileIDs, inputFileIDs.size)
+		val inputData = sc.parallelize(inputFileIDs, inputFileIDs.size).cache
+		val regIDs = inputData.collect
+		println("Hamid: Number of regions = " + regIDs.size)
+		for(regID <- regIDs)
+			println("Hamid:" + regID)
+		//////////////////////////////////////////////////////////////////////
+		/*f = Future {
+			// Write to BAM
+			val factory = new SAMFileWriterFactory
+			val header = createHeader(config)
+			header.setSortOrder(SAMFileHeader.SortOrder.coordinate)
+			val writer = factory.makeBAMWriter(header, true,  hdfsManager.openStream(config.getCombinedFilesFolder + "sorted.bam"))
+			for (regID <- regIDs)
+			{
+				LogWriter.statusLog("BAMWriter: ", t0, "Waiting for " + regID, config)
+				while(!hdfsManager.exists(config.getCombinedFilesFolder + "ulStatus/" + regID))
+					Thread.sleep(250)
+				LogWriter.statusLog("BAMWriter: ", t0, "Reading " + regID, config)
+				val samRecsReader = new SamRecsReader(hdfsManager.openInputStream(config.getCombinedFilesFolder + "sortedSam/" + regID + ".sam"), config)	
+				samRecsReader.parseSam
+				val samRecs = samRecsReader.getSamRecs
+				samRecsReader.close
+				LogWriter.statusLog("BAMWriter: ", t0, "Writing " + regID, config)
+				val r = writeToBAM(samRecs, writer, config)
+				LogWriter.statusLog("BAMWriter: ", t0, "Done writing " + regID + 
+					". Total reads: " + r._1 + ", good ones: " + r._2 + ", bad ones = " + r._3, config)
+			}
+			writer.close
+		}*/
+		//////////////////////////////////////////////////////////////////////
 		val readsByRegion = inputData.map(x => sortSams(x, bcConfig.value)).cache
 		for(e <- readsByRegion)
 			println(e._1 + ": " + e._2)
 		totalReads = readsByRegion.map(_._2).reduce(_+_)
+		Await.result(f, Duration.Inf)
 	}
 	LogWriter.statusLog("Total execution time:", t0, ((System.currentTimeMillis - t0) / 1000) + " secs. Total reads = " + totalReads, config)
 }
