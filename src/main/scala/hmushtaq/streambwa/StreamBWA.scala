@@ -465,7 +465,7 @@ def sortSams(regionID: String, config: Configuration) : (String, Int) =
 	
 	//////////////////////////////////////////////////////////////////////////
 	// Read the sorted SAM file
-	val samRecsReader = new SamRecsReader(hdfsManager.openInputStream(config.getCombinedFilesFolder + "sortedSam/" + regionID + ".sam"), config)	
+	/*val samRecsReader = new SamRecsReader(hdfsManager.openInputStream(config.getCombinedFilesFolder + "sortedSam/" + regionID + ".sam"), config)	
 	samRecsReader.parseSam
 	val samRecs = samRecsReader.getSamRecs
 	samRecsReader.close
@@ -485,7 +485,7 @@ def sortSams(regionID: String, config: Configuration) : (String, Int) =
 	val writer = factory.makeBAMWriter(header, true,  hdfsManager.openStream(config.getCombinedFilesFolder + "bam/" + regionID + ".bam"))
 	val r = writeToBAM(samRecs, writer, config)
 	writer.close
-	LogWriter.dbgLog("sort/" + regionID, t0, "BAM file written. Total reads: " + r._1 + ", good ones: " + r._2 + ", bad ones = " + r._3, config)
+	LogWriter.dbgLog("sort/" + regionID, t0, "BAM file written. Total reads: " + r._1 + ", good ones: " + r._2 + ", bad ones = " + r._3, config)*/
 	//////////////////////////////////////////////////////////////////////////
 	
 	return (regionID, numOfReads)
@@ -647,24 +647,26 @@ def main(args: Array[String])
 	}
 	else
 	{
-		var f: Future[Unit] = null
 		val posFolder = config.getCombinedFilesFolder + "pos"
 		val posFileNames = FilesManager.getInputFileNames(posFolder, config)
 		// <chrIndex, filename without ext>
 		val posFileNamesWithIndex = posFileNames.map(x => (x.split('-')(0), x)).map(x => (config.getChrIndex(x._1), 
 			x._2.substring(0, x._2.length-4))).filter(x => x._1 >= 0)
+		val chrParts = posFileNamesWithIndex.groupBy(_._1)
+		val chrIndexes = chrParts.map(_._1)
+		val f = new Array[Future[Unit]](chrIndexes.size)
+		println("chrIndexes = ... = > total = " + chrIndexes.size)
+		for(e <- chrIndexes)
+			println(e)
+		println("----------------")
 		// Sorting
 		implicit val samRecordOrdering = new Ordering[(Int, String)] {
 			override def compare(a: (Int, String), b: (Int, String)) = 
 			{
-				if (a._1 == b._1)
-				{
-					val aRegion = a._2.split('-')(1).toInt
-					val bRegion = b._2.split('-')(1).toInt
-					aRegion - bRegion
-				}
-				else
-					a._1 - b._1
+				val part1 = a._2.split('-')(1).toInt
+				val part2 = b._2.split('-')(1).toInt
+				
+				part1 - part2
 			}
 		}
 		scala.util.Sorting.stableSort(posFileNamesWithIndex)
@@ -675,35 +677,68 @@ def main(args: Array[String])
 		for(regID <- regIDs)
 			println("Hamid:" + regID)
 		//////////////////////////////////////////////////////////////////////
-		/*f = Future {
-			// Write to BAM
-			val factory = new SAMFileWriterFactory
-			val header = createHeader(config)
-			header.setSortOrder(SAMFileHeader.SortOrder.coordinate)
-			val writer = factory.makeBAMWriter(header, true,  hdfsManager.openStream(config.getCombinedFilesFolder + "sorted.bam"))
-			for (regID <- regIDs)
-			{
-				LogWriter.statusLog("BAMWriter: ", t0, "Waiting for " + regID, config)
-				while(!hdfsManager.exists(config.getCombinedFilesFolder + "ulStatus/" + regID))
-					Thread.sleep(250)
-				LogWriter.statusLog("BAMWriter: ", t0, "Reading " + regID, config)
-				val samRecsReader = new SamRecsReader(hdfsManager.openInputStream(config.getCombinedFilesFolder + "sortedSam/" + regID + ".sam"), config)	
-				samRecsReader.parseSam
-				val samRecs = samRecsReader.getSamRecs
-				samRecsReader.close
-				LogWriter.statusLog("BAMWriter: ", t0, "Writing " + regID, config)
-				val r = writeToBAM(samRecs, writer, config)
-				LogWriter.statusLog("BAMWriter: ", t0, "Done writing " + regID + 
-					". Total reads: " + r._1 + ", good ones: " + r._2 + ", bad ones = " + r._3, config)
+		var findex = 0
+		val synchro = new HDFSManager
+		for(e <- chrParts)
+		{
+			val chrIndex = e._1
+			val index = findex
+			f(index) = Future {
+				// Write to BAM
+				val factory = new SAMFileWriterFactory
+				val header = createHeader(config)
+				header.setSortOrder(SAMFileHeader.SortOrder.coordinate)
+				//////////////////////////////
+				val bamrg = new SAMReadGroupRecord(config.getRGID)
+				bamrg.setLibrary("LIB1")
+				bamrg.setPlatform("ILLUMINA")
+				bamrg.setPlatformUnit("UNIT1")
+				bamrg.setSample("SAMPLE1")
+				header.addReadGroup(bamrg)
+				/////////////////////////////
+				val writer = factory.makeBAMWriter(header, true,  hdfsManager.openStream(config.getCombinedFilesFolder + "sorted/" + chrIndex + ".bam"))
+				for (regionID <- e._2)
+				{
+					val regID = regionID._2
+					synchro.synchronized {
+						LogWriter.statusLog("BAMWriter: ", t0, "(" + chrIndex + ", " + index + "). Waiting for " + regID, config) 
+					}
+					while(!hdfsManager.exists(config.getCombinedFilesFolder + "ulStatus/" + regID))
+					{
+						/*synchro.synchronized 
+						{
+							LogWriter.statusLog("BAMWriter: ", t0, "(" + chrIndex + ", " + index + "). " + 
+								config.getCombinedFilesFolder + "ulStatus/" + regID + " doesn't exist yet!", config) 
+						}*/
+						Thread.sleep(250)
+					}
+					synchro.synchronized {
+						LogWriter.statusLog("BAMWriter: ", t0, "(" + chrIndex + ", " + index + "). Reading " + regID, config) 
+					}
+					val samRecsReader = new SamRecsReader(hdfsManager.openInputStream(config.getCombinedFilesFolder + "sortedSam/" + regID + ".sam"), config)	
+					samRecsReader.parseSam
+					val samRecs = samRecsReader.getSamRecs
+					samRecsReader.close
+					synchro.synchronized {
+						LogWriter.statusLog("BAMWriter: ", t0, "(" + chrIndex + ", " + index + "). Writing " + regID, config) 
+					}
+					val r = writeToBAM(samRecs, writer, config)
+					synchro.synchronized {
+						LogWriter.statusLog("BAMWriter: ", t0, "(" + chrIndex + ", " + index + "). Done writing " + regID + 
+							". Total reads: " + r._1 + ", good ones: " + r._2 + ", bad ones = " + r._3, config) 
+					}
+				}
+				writer.close
 			}
-			writer.close
-		}*/
+			findex += 1
+		}
 		//////////////////////////////////////////////////////////////////////
 		val readsByRegion = inputData.map(x => sortSams(x, bcConfig.value)).cache
 		for(e <- readsByRegion)
 			println(e._1 + ": " + e._2)
 		totalReads = readsByRegion.map(_._2).reduce(_+_)
-		Await.result(f, Duration.Inf)
+		for(a <- 0 until chrIndexes.size)
+			Await.result(f(a), Duration.Inf)
 	}
 	LogWriter.statusLog("Total execution time:", t0, ((System.currentTimeMillis - t0) / 1000) + " secs. Total reads = " + totalReads, config)
 }
