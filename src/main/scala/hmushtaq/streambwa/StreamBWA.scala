@@ -63,6 +63,7 @@ object StreamBWA
 {
 final val compressRDDs = true
 final val compLevel = 1
+final val writeBAM2HDFS = true
 //////////////////////////////////////////////////////////////////////////////
 def bwaRun (chunkNum: Int, config: Configuration) : (Int, Int, Array[(String, Int)]) =
 {
@@ -545,7 +546,11 @@ def main(args: Array[String])
 	
 	if (compressRDDs)
 		conf.set("spark.rdd.compress","true")
-	
+	if (part == 2)
+	{
+		conf.set("spark.network.timeout", "60000")
+		conf.set("spark.executor.heartbeatInterval", "60000")
+	}
 	// Comment these two lines if you want to see more verbose messages from Spark
 	//Logger.getLogger("org").setLevel(Level.OFF);
 	//Logger.getLogger("akka").setLevel(Level.OFF);
@@ -679,6 +684,8 @@ def main(args: Array[String])
 		//////////////////////////////////////////////////////////////////////
 		var findex = 0
 		val synchro = new HDFSManager
+		if (!writeBAM2HDFS)
+			new File("sorted").mkdirs
 		for(e <- chrParts)
 		{
 			val chrIndex = e._1
@@ -696,7 +703,12 @@ def main(args: Array[String])
 				bamrg.setSample("SAMPLE1")
 				header.addReadGroup(bamrg)
 				/////////////////////////////
-				val writer = factory.makeBAMWriter(header, true,  hdfsManager.openStream(config.getCombinedFilesFolder + "sorted/" + chrIndex + ".bam"))
+				val writer = {
+					if (writeBAM2HDFS)
+						factory.makeBAMWriter(header, true,  hdfsManager.openStream(config.getCombinedFilesFolder + "sorted/" + chrIndex + ".bam"))
+					else
+						factory.makeBAMWriter(header, true,  new File("sorted/" + chrIndex + ".bam"))
+				}
 				for (regionID <- e._2)
 				{
 					val regID = regionID._2
@@ -710,7 +722,7 @@ def main(args: Array[String])
 							LogWriter.statusLog("BAMWriter: ", t0, "(" + chrIndex + ", " + index + "). " + 
 								config.getCombinedFilesFolder + "ulStatus/" + regID + " doesn't exist yet!", config) 
 						}*/
-						Thread.sleep(250)
+						Thread.sleep(100)
 					}
 					synchro.synchronized {
 						LogWriter.statusLog("BAMWriter: ", t0, "(" + chrIndex + ", " + index + "). Reading " + regID, config) 
