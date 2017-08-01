@@ -546,7 +546,7 @@ def main(args: Array[String])
 	
 	if (compressRDDs)
 		conf.set("spark.rdd.compress","true")
-	if (part == 2)
+	if (part != 1)
 	{
 		conf.set("spark.network.timeout", "60000")
 		conf.set("spark.executor.heartbeatInterval", "60000")
@@ -746,11 +746,11 @@ def main(args: Array[String])
 		}
 		//////////////////////////////////////////////////////////////////////
 		val readsByRegion = inputData.map(x => sortSams(x, bcConfig.value)).cache
-		for(e <- readsByRegion)
+		for(e <- readsByRegion.collect)
 			println(e._1 + ": " + e._2)
-		totalReads = readsByRegion.map(_._2).reduce(_+_)
 		for(a <- 0 until chrIndexes.size)
 			Await.result(f(a), Duration.Inf)
+		totalReads = readsByRegion.map(_._2).reduce(_+_)
 	}
 	LogWriter.statusLog("Total execution time:", t0, ((System.currentTimeMillis - t0) / 1000) + " secs. Total reads = " + totalReads, config)
 }
