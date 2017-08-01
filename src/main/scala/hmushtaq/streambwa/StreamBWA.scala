@@ -686,6 +686,77 @@ def main(args: Array[String])
 		val synchro = new HDFSManager
 		if (!writeBAM2HDFS)
 			new File("sorted").mkdirs
+			
+		val threadArr = new Array[Thread](chrParts.size)
+		val cIndexes = new Array[Int](chrParts.size)
+		val regionIDArrays = new Array[Array[(Int, String)]](chrParts.size)
+		
+		for(e <- chrParts)
+		{
+			cIndexes(findex) = e._1
+			regionIDArrays(findex) = e._2
+			findex += 1
+		}
+		
+		for(index <- 0 until chrParts.size)
+		{
+			val chrIndex = cIndexes(index)
+			val regionIDArr = regionIDArrays(index)
+			// Multithreaded /////////////////////////////////////////////////
+			threadArr(index) = new Thread 
+			{ 
+				override def run 
+				{
+			//////////////////////////////////////////////////////////////////
+			// Write to BAM
+				val factory = new SAMFileWriterFactory
+				val header = createHeader(config)
+				header.setSortOrder(SAMFileHeader.SortOrder.coordinate)
+				//////////////////////////////
+				val bamrg = new SAMReadGroupRecord(config.getRGID)
+				bamrg.setLibrary("LIB1")
+				bamrg.setPlatform("ILLUMINA")
+				bamrg.setPlatformUnit("UNIT1")
+				bamrg.setSample("SAMPLE1")
+				header.addReadGroup(bamrg)
+				/////////////////////////////
+				val writer = {
+					if (writeBAM2HDFS)
+						factory.makeBAMWriter(header, true,  hdfsManager.openStream(config.getCombinedFilesFolder + "sorted/" + chrIndex + ".bam"))
+					else
+						factory.makeBAMWriter(header, true,  new File("sorted/" + chrIndex + ".bam"))
+				}
+				for (regionID <- regionIDArr)
+				{
+					val regID = regionID._2
+					synchro.synchronized {
+						LogWriter.statusLog("BAMWriter: ", t0, "(" + chrIndex + ", " + index + "). Waiting for " + regID, config) 
+					}
+					while(!hdfsManager.exists(config.getCombinedFilesFolder + "ulStatus/" + regID))
+						Thread.sleep(100)
+					synchro.synchronized {
+						LogWriter.statusLog("BAMWriter: ", t0, "(" + chrIndex + ", " + index + "). Reading " + regID, config) 
+					}
+					val samRecsReader = new SamRecsReader(hdfsManager.openInputStream(config.getCombinedFilesFolder + "sortedSam/" + regID + ".sam"), config)	
+					samRecsReader.parseSam
+					val samRecs = samRecsReader.getSamRecs
+					samRecsReader.close
+					synchro.synchronized {
+						LogWriter.statusLog("BAMWriter: ", t0, "(" + chrIndex + ", " + index + "). Writing " + regID, config) 
+					}
+					val r = writeToBAM(samRecs, writer, config)
+					synchro.synchronized {
+						LogWriter.statusLog("BAMWriter: ", t0, "(" + chrIndex + ", " + index + "). Done writing " + regID + 
+							". Total reads: " + r._1 + ", good ones: " + r._2 + ", bad ones = " + r._3, config) 
+					}
+				}
+				writer.close
+			// Multithreaded /////////////////////////////////////////////////
+			} } 
+			threadArr(index).start
+			//////////////////////////////////////////////////////////////////
+		}
+		/*			
 		for(e <- chrParts)
 		{
 			val chrIndex = e._1
@@ -717,11 +788,6 @@ def main(args: Array[String])
 					}
 					while(!hdfsManager.exists(config.getCombinedFilesFolder + "ulStatus/" + regID))
 					{
-						/*synchro.synchronized 
-						{
-							LogWriter.statusLog("BAMWriter: ", t0, "(" + chrIndex + ", " + index + "). " + 
-								config.getCombinedFilesFolder + "ulStatus/" + regID + " doesn't exist yet!", config) 
-						}*/
 						Thread.sleep(100)
 					}
 					synchro.synchronized {
@@ -744,12 +810,20 @@ def main(args: Array[String])
 			}
 			findex += 1
 		}
+		*/
 		//////////////////////////////////////////////////////////////////////
 		val readsByRegion = inputData.map(x => sortSams(x, bcConfig.value)).cache
 		for(e <- readsByRegion.collect)
 			println(e._1 + ": " + e._2)
+		//////////////////////////////////////////////////////////////////
+		/*
 		for(a <- 0 until chrIndexes.size)
 			Await.result(f(a), Duration.Inf)
+		*/
+		// Multithreaded ///////////////////////////////////////////////// 
+			for(thread <- 0 until chrParts.size)
+				threadArr(thread).join
+		//////////////////////////////////////////////////////////////////
 		totalReads = readsByRegion.map(_._2).reduce(_+_)
 	}
 	LogWriter.statusLog("Total execution time:", t0, ((System.currentTimeMillis - t0) / 1000) + " secs. Total reads = " + totalReads, config)
