@@ -47,6 +47,9 @@ def executeStreamBWA():
 		if not os.path.exists(bwaPath):
 			print "The bwa executable (" + bwaPath + ") is not found!"
 			sys.exit(1)
+	
+	dictPath = refPath.replace(".fasta", ".dict")
+	dictFile = './' + dictPath[dictPath.rfind('/') + 1:]
 			
 	tools = glob.glob(toolsFolder + '/*')
 	toolsStr = ''
@@ -57,10 +60,11 @@ def executeStreamBWA():
 	ignoreListStr = "" if (len(ignoreListPath) == 0) else ("," + ignoreListPath)
 	
 	cmdStr = "$SPARK_HOME/bin/spark-submit " + \
-	"--class \"hmushtaq.streambwa.StreamBWA\" --master " + mode + " --files " + configFilePath + "," + toolsStr + ignoreListStr + " " + \
+	"--jars lib/htsjdk-1.143.jar " + \
+	"--class \"hmushtaq.streambwa.StreamBWA\" --master " + mode + " --files " + dictFile + "," + configFilePath + "," + toolsStr + ignoreListStr + " " + \
 	"--driver-memory " + driver_mem + " --executor-memory " + exe_mem + " " + \
 	"--num-executors " + numExecutors + " --executor-cores " + numTasks + " " + \
-	exeName + " " + configFilePath
+	exeName + " " + configFilePath + " 1"
 	
 	print cmdStr
 	addToLog("[" + time.ctime() + "] " + cmdStr)
