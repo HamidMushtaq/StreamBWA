@@ -34,7 +34,7 @@ toolsFolder = doc.getElementsByTagName("toolsFolder")[0].firstChild.data
 numExecutors = doc.getElementsByTagName("numExecutors")[0].firstChild.data
 ignoreList = doc.getElementsByTagName("ignoreList")[0].firstChild
 ignoreListPath = "" if (ignoreList == None) else ignoreList.data.strip()
-numTasks = doc.getElementsByTagName("numTasks")[0].firstChild.data
+numTasks = doc.getElementsByTagName("numTasks1")[0].firstChild.data
 exe_mem = doc.getElementsByTagName("execMemGB")[0].firstChild.data + "g"
 driver_mem = doc.getElementsByTagName("driverMemGB")[0].firstChild.data + "g"
 
