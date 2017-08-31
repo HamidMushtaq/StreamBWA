@@ -19,8 +19,7 @@
 	<!-- ======================= -->
 	<!-- Num of tasks for part 1 -->
 	<numTasks1>8</numTasks1>
-	<!-- Num of tasks for part 2 -->
-	<numTasks2>16</numTasks2>
+	<!-- numTasks2 will be used for sorting and mark duplicates, which is not fully implemented yet -->
 	<!-- ======================= -->
 	<groupSize>384</groupSize>
 	<streaming>true</streaming>
