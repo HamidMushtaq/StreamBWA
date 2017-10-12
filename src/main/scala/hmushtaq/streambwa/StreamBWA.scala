@@ -64,7 +64,7 @@ import htsjdk.samtools._
 
 object StreamBWA
 {
-final val compressRDDs = true
+final val compressRDDs = false
 final val compLevel = 1
 final val writeBAM2HDFS = true
 //////////////////////////////////////////////////////////////////////////////
