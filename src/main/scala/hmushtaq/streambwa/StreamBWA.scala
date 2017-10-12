@@ -544,16 +544,11 @@ def writeToBAM(samRecs: Array[SAMRecord], writer: SAMFileWriter, config: Configu
 def main(args: Array[String]) 
 {
 	val conf = new SparkConf().setAppName("StreamBWA")
+	if (compressRDDs)
+		conf.set("spark.rdd.compress","true")
 	val sc = new SparkContext(conf)
 	val part = args(1).toInt
 	
-	if (compressRDDs)
-		conf.set("spark.rdd.compress","true")
-	if (part == 2)
-	{
-		conf.set("spark.network.timeout", "60000")
-		conf.set("spark.executor.heartbeatInterval", "60000")
-	}
 	// Comment these two lines if you want to see more verbose messages from Spark
 	//Logger.getLogger("org").setLevel(Level.OFF);
 	//Logger.getLogger("akka").setLevel(Level.OFF);
