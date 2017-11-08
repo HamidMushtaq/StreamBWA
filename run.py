@@ -34,7 +34,7 @@ toolsFolder = doc.getElementsByTagName("toolsFolder")[0].firstChild.data
 numExecutors = doc.getElementsByTagName("numExecutors")[0].firstChild.data
 ignoreList = doc.getElementsByTagName("ignoreList")[0].firstChild
 ignoreListPath = "" if (ignoreList == None) else ignoreList.data.strip()
-numTasks = doc.getElementsByTagName("numTasks")[0].firstChild.data
+numTasks = doc.getElementsByTagName("numTasks1")[0].firstChild.data
 exe_mem = doc.getElementsByTagName("execMemGB")[0].firstChild.data + "g"
 driver_mem = doc.getElementsByTagName("driverMemGB")[0].firstChild.data + "g"
 
@@ -47,6 +47,9 @@ def executeStreamBWA():
 		if not os.path.exists(bwaPath):
 			print "The bwa executable (" + bwaPath + ") is not found!"
 			sys.exit(1)
+	
+	dictPath = refPath.replace(".fasta", ".dict")
+	dictFile = './' + dictPath[dictPath.rfind('/') + 1:]
 			
 	tools = glob.glob(toolsFolder + '/*')
 	toolsStr = ''
@@ -57,10 +60,11 @@ def executeStreamBWA():
 	ignoreListStr = "" if (len(ignoreListPath) == 0) else ("," + ignoreListPath)
 	
 	cmdStr = "$SPARK_HOME/bin/spark-submit " + \
-	"--class \"hmushtaq.streambwa.StreamBWA\" --master " + mode + " --files " + configFilePath + "," + toolsStr + ignoreListStr + " " + \
+	"--jars lib/htsjdk-1.143.jar " + \
+	"--class \"hmushtaq.streambwa.StreamBWA\" --master " + mode + " --files " + dictFile + "," + configFilePath + "," + toolsStr + ignoreListStr + " " + \
 	"--driver-memory " + driver_mem + " --executor-memory " + exe_mem + " " + \
 	"--num-executors " + numExecutors + " --executor-cores " + numTasks + " " + \
-	exeName + " " + configFilePath
+	exeName + " " + configFilePath + " 1"
 	
 	print cmdStr
 	addToLog("[" + time.ctime() + "] " + cmdStr)

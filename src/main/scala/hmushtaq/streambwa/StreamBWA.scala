@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Hamid Mushtaq, TU Delft
+ * Copyright (C) 2017 TU Delft, The Netherlands
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,6 +13,9 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ * Authors: Hamid Mushtaq
+ *
  */
 package hmushtaq.streambwa
 
@@ -564,6 +567,9 @@ def main(args: Array[String])
 	var t0 = System.currentTimeMillis
 	
 	var totalReads = 0
+	/*==============================================================================================================
+	// This part (Part1) performs streaming BWA, and combination of output into sam file(s), in a streaming fashion.
+	===============================================================================================================*/
 	if (part == 1)
 	{
 		val makeCombinedFile = config.getMakeCombinedFile
@@ -645,6 +651,10 @@ def main(args: Array[String])
 			Await.result(f, Duration.Inf)
 		}
 	}
+	/*============================================================================================================
+	// This part (Part2) will perform sorting of the combined sam file(s), produced by part 1, mark the duplicates 
+	//  and produce the mark duplicated bam files. This functionality is still not fully implemented yet.
+	=============================================================================================================*/
 	else
 	{
 		val posFolder = config.getCombinedFilesFolder + "pos"

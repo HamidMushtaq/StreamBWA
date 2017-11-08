@@ -1,8 +1,10 @@
 #!/usr/bin/python
 #****************************************/
-#	Script:		runWithChunker.py	
+#	Script:		runSort.py	
 #	Author:		Hamid Mushtaq  			
 #****************************************/
+# This part (Part2) will perform sorting of the combined sam file(s), mark the duplicates and produce bam files. 
+#  This functionality is still not fully implemented.
 from xml.dom import minidom
 import sys
 import os

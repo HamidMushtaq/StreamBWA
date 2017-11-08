@@ -1,0 +1,12 @@
+<configuration>
+	<fastq1Path>https://dnanexus-rnd.s3.amazonaws.com/NA12878-xten/reads/NA12878D_HiSeqX_R1.fastq.gz</fastq1Path> 
+	<fastq2Path>https://dnanexus-rnd.s3.amazonaws.com/NA12878-xten/reads/NA12878D_HiSeqX_R2.fastq.gz</fastq2Path>
+	<outputFolder>chunks</outputFolder> 
+	<compLevel>4</compLevel>
+	<chunkSizeMB>60</chunkSizeMB>
+	<blockSizeMB>0.0065536</blockSizeMB>
+	<driverMemGB>8</driverMemGB>
+	<numThreads>32</numThreads>
+	<!-- interleave field is ignored obviously for a single ended input -->
+	<interleave>true</interleave> 
+</configuration>

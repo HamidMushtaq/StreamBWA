@@ -15,7 +15,7 @@
 	<execMemGB>112</execMemGB> 						
 	<driverMemGB>6</driverMemGB> 					
 	<numExecutors>4</numExecutors> 	
-	<numTasks>8</numTasks>
+	<numTasks1>8</numTasks1>
 	<groupSize>1792</groupSize>
 	<streaming>true</streaming>
 	<downloadRef>false</downloadRef>

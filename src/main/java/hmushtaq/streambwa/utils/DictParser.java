@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 TU Delft, The Netherlands
+ * Copyright (C) 2017 TU Delft, The Netherlands
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
