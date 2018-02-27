@@ -73,7 +73,7 @@ The chunker program is run on the master node, which means it is not distributed
 6. **blockSizeMB** - The input FASTQ files are read block by block. In this field, you specify how big such block should be in MBs. The bigger the block size, the more memory would be consumed. However, bigger block size can also mean better performance.
 7. **driverMemGB** - The memory used by the chunker utility in GBs.
 8. **numThreads** - The number of threads performing chunking. Try to use as many threads as possible as allowed by your system.
-9. **interleave** - `true` or `false` depending on whether you want to interleave the contents of the two FASTQ files for a paired-ended input into single chunks. For SparkGA, when using pair-ended input, you must always set this field to `true`. For single-ended input, this field is ignored and can even be ommitted.
+9. **interleave** - `true` or `false` depending on whether you want to interleave the contents of the two FASTQ files for a paired-ended input into single chunks.
 
 ## Running StreamBWA
 Run it using the `runWithChunker.py` script. That script would run the chunker utility in parallel with the main program. Before running, make sure that the chunker utility's jar file (chunker_2.11-1.0.jar) is present. Moreover, the lib folder containing the htsjdk-1.143.jar should also be present. Furthermore, the reference *.dict file must also be there. Then run the program as follows.
