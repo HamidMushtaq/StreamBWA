@@ -757,7 +757,9 @@ def main(args: Array[String])
 		for(a <- 0 until chrIndexes.size)
 			Await.result(f(a), Duration.Inf)
 	}
+	
 	LogWriter.statusLog("Total execution time:", t0, ((System.currentTimeMillis - t0) / 1000) + " secs. Total reads = " + totalReads, config)
+	sc.stop()
 }
 //////////////////////////////////////////////////////////////////////////////
 } // End of Class definition

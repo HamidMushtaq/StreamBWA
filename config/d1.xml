@@ -35,6 +35,7 @@
 	<!-- 0 if combining to one file. 1 if you want a separate file for each chromosome. Otherwise define the length of regions -->
 	<chrRegionLength>0</chrRegionLength>
 	<!-- ================================================= -->
+	<!-- Creation of sorted BAM is not functional yet, but this field would be used in future when that feature works. -->
 	<sortedBAMPath>bwaOut/sortedBAM/sorted.bam</sortedBAMPath>
 	<!-- ================================================= -->
 </configuration>
