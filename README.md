@@ -63,7 +63,7 @@ Several example configuration files are given in the `config `folder. Here is wh
 21. **chrRegionLength** - Leave this to 0, if you want one combined SAM output file. 1 if you want a SAM file for each chromosome. Otherwise, give the region length, for SAM files of specific region size.
 
 ### Configuration file for the chunker utility
-The chunker program is run on the master node, which means it is not distributed like StreamBWA. It can take both compressed (gzipped) or uncompressed FASTQ files as input. By default, it uploads the chunks it makes to an HDFS directory specified as `outputFolder` in the configuration file. However, if you prefix the value of `outputFolder` with `local:`, it would put the chunks in a local folder. For example, if you specify `local:/home/hamidmushtaq/data/chunks`, it would put the chunks in the folder `/home/hamidmushtaq/data/chunks`. Moreover, you don't have to create the output folder yourself, as the chunker program would create one itself. 
+The chunker program is run on the master node, which means it is not distributed like StreamBWA. It can take both compressed (gzipped) or uncompressed FASTQ files as input. By default, it uploads the chunks it makes to an HDFS directory specified as `outputFolder` in the configuration file. However, if you prefix the value of `outputFolder` with `local:`, it would put the chunks in a local folder. For example, if you specify `local:/home/hamidmushtaq/data/chunks`, it would put the chunks in the folder `/home/hamidmushtaq/data/chunks`. Moreover, you don't have to create the output folder yourself, as the chunker program would create one itself. Example configuration files for the chunker are provided in the config/chunker folder.
 
 1. **fastq1Path** - The path or URL of the first FASTQ file for a pair-ended input or the only FASTQ file for a single-ended input. Note that the chunker utility would automatically infer if the input file is compressed or not by seeing the `.gz` extension.
 2. **fastq2Path** - The path or URL of the second FASTQ file for a pair-ended input. For a single-ended input, leave this field empty (Like this -> `<fastq2Path></fastq2Path>`). You can't ommit it though.
@@ -76,7 +76,7 @@ The chunker program is run on the master node, which means it is not distributed
 9. **interleave** - `true` or `false` depending on whether you want to interleave the contents of the two FASTQ files for a paired-ended input into single chunks. For SparkGA, when using pair-ended input, you must always set this field to `true`. For single-ended input, this field is ignored and can even be ommitted.
 
 ## Running StreamBWA
-Run it using the runWithChunker.py script. That script would run the chunker utility in parallel with the main program. Before running, make sure that the chunker utility's jar file (chunker_2.11-1.0.jar) is present. Moreover, the lib folder containing the htsjdk-1.143.jar should also be present. Furthermore, the reference *.dict file must also be there. Then run the program as follows.
+Run it using the `runWithChunker.py` script. That script would run the chunker utility in parallel with the main program. Before running, make sure that the chunker utility's jar file (chunker_2.11-1.0.jar) is present. Moreover, the lib folder containing the htsjdk-1.143.jar should also be present. Furthermore, the reference *.dict file must also be there. Then run the program as follows.
 
 python runWithChunker.py <path to the streambwa jar file> <path to your config file> <path to the your chunker config file>
 ___
