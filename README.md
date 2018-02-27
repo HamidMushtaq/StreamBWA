@@ -37,7 +37,7 @@ The *.dict file must be copied to the folder from where you are running the prog
 
 ## Configuration files
 
-### Configuration file for SparkGA
+### Configuration file for StreamBWA
 Several example configuration files are given in the `config `folder. Here is what each tag means.
 
 1. **mode** - The mode of running. Its value could be `yarn-client` or `yarn-cluster`.
