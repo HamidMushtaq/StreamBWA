@@ -44,8 +44,8 @@ Several example configuration files are given in the `config `folder. Here is wh
 2. **refPath** - The path of the FASTA file. All the accompanying files, such as \*.fasta.bwt, \*.dict and \*.fasta.pac etc. should be in the same folder as the FASTA file. The names of those files would be infered from the FASTA file. If, you have already downloaded these files to each node, then only giving the name of the fasta file would suffice. Otherwise, you could set **downloadRef** value to true, to tell StreamBWA to download the files for you. However, this downloading functionality has not been fully tested yet, so its recommended to download the files yourself.
 3. **inputFolder** - The folder that contains the input chunks. In other words, this is the folder where the chunker utility puts the chunks.
 4. **outputFolder** - The output folder. SAM file corresponding to a chunk is saved in \<outputFolder\>/sam/\<chunkNum\> in gzipped form, by the name of content.sam.gz. The folder where the combined SAM file(s) is produced is given by the tag `combinedFilesFolder`.
-5. **tmpFolder** - This folder is the one used for storing temporary files. This folder would be in a local directory. For cluster modes, this folder would be present on each node.
-6. **sfFolder** - This is the folder, where all the reference and index files are stored. This folder would be present on each node. 
+5. **tmpFolder** - This folder is the one used for storing temporary files. This folder would be present on each data node.
+6. **sfFolder** - This is the folder, where all the reference and index files are stored. This folder would be present on each data node. 
 7. **toolsFolder** - In this folder, you put the BWA program. This folder would be in a local directory. The run script, would send these executables to each executor, using `--files` when executing `spark-submit`.
 8. **extraBWAParams** - The extra parameters to BWA, such as number of threads and read group string. See example config files to know more.
 9. **singleEnded** - Is the input FASTQ file single ended or pair ended.
