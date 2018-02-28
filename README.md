@@ -78,7 +78,7 @@ The chunker program is run on the master node, which means it is not distributed
 ## Running StreamBWA
 Run it using the `runWithChunker.py` script. That script would run the chunker utility in parallel with the main program. Before running, make sure that the chunker utility's jar file (chunker_2.11-1.0.jar) is present. Moreover, the lib folder containing the htsjdk-1.143.jar should also be present. Furthermore, the reference *.dict file must also be there. Then run the program as follows.
 
-python runWithChunker.py \<path to the streambwa jar file\> \<path to your config file\> \<path to your chunker config file\>
+`python runWithChunker.py <path to the streambwa jar file> <path to your config file> <path to your chunker config file>`
 ___
 
 For any further help or suggestions, contact me at hmushtaq1980@yahoo.com.
